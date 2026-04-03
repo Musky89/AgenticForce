@@ -1,0 +1,18 @@
+{
+  "project_name": "Aurelia Summer Launch",
+  "client_name": "Aurelia Beauty",
+  "industry": "Beauty / Skincare",
+  "objective": "Increase qualified consideration and purchase intent for the summer line",
+  "target_audience": "Gen Z skincare buyers in urban markets",
+  "offer": "Summer essentials bundle with limited seasonal formulas",
+  "channels": ["Instagram", "TikTok", "LinkedIn", "Email"],
+  "competitors": ["GlowLab", "Skin Ritual", "NOVA Beauty"],
+  "brand_voice": "Confident, modern, warm, and specific",
+  "constraints": [
+    "No medical efficacy claims",
+    "Use approved seasonal palette only",
+    "Avoid fear-based messaging"
+  ],
+  "budget_notes": "Prioritize creative quality and concept testing over production volume",
+  "timeline": "First concept review in 72 hours"
+}
