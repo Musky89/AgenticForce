@@ -470,15 +470,15 @@ function AgentRunsTab({ runs }: { runs: AgentRun[] }) {
                 </div>
               </div>
             </CardHeader>
-            {run.output_data?.content && (
+            {run.output_data?.content ? (
               <CardContent>
                 <ScrollArea className="max-h-96">
                   <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-sm leading-relaxed">
-                    {String(run.output_data.content)}
+                    {String(run.output_data.content as string)}
                   </div>
                 </ScrollArea>
               </CardContent>
-            )}
+            ) : null}
             {run.error_message && (
               <CardContent>
                 <p className="text-sm text-red-400">{run.error_message}</p>
