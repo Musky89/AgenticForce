@@ -22,6 +22,9 @@ from app.agents.registry import get_agent
 from app.services.creative_memory import get_client_memory_context, auto_capture_from_approval
 from app.services.image_gen import generate_image, generate_images_from_art_direction
 from app.services.quality_scoring import score_image, score_copy
+from app.services.event_bus import event_bus
+from app.services.finishing import batch_finish
+from app.services.agent_protocol import create_handoff_message, send_message
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +187,8 @@ async def run_single_agent(
     db.add(agent_run)
     await db.flush()
 
+    await event_bus.publish_task_started(project_id, agent_run.id, agent_role.value)
+
     try:
         result = await agent.run(context)
         agent_run.status = RunStatus.COMPLETED
@@ -203,11 +208,14 @@ async def run_single_agent(
         )
         db.add(deliverable)
 
+        await event_bus.publish_task_completed(project_id, agent_run.id, result["content"][:300])
+
     except Exception as e:
         logger.exception(f"Agent {agent_role.value} failed")
         agent_run.status = RunStatus.FAILED
         agent_run.error_message = str(e)
         agent_run.completed_at = datetime.utcnow()
+        await event_bus.publish(project_id, {"type": "task_failed", "agent_role": agent_role.value, "error": str(e)[:200]})
 
     await db.flush()
     return agent_run
@@ -235,6 +243,7 @@ async def run_creative_pipeline(
     runs.append(run)
     if run.status == RunStatus.FAILED:
         return runs
+    await send_message(db, create_handoff_message("strategist", "creative_director", project_id, "Strategy complete", run.output_data.get("content", "")[:500] if run.output_data else ""))
 
     # Stage 2: Concept Exploration (Creative Director generates 10-20 concepts)
     logger.info("Pipeline Stage 2: Concept Exploration")
@@ -246,6 +255,7 @@ async def run_creative_pipeline(
     runs.append(run)
     if run.status == RunStatus.FAILED:
         return runs
+    await send_message(db, create_handoff_message("creative_director", "art_director", project_id, "Concepts ready — top 5 selected", run.output_data.get("content", "")[:500] if run.output_data else ""))
 
     # Stage 3: Art Direction (detailed visual briefs for top concepts)
     logger.info("Pipeline Stage 3: Art Direction")
@@ -256,6 +266,7 @@ async def run_creative_pipeline(
     runs.append(run)
     if run.status == RunStatus.FAILED:
         return runs
+    await send_message(db, create_handoff_message("art_director", "designer", project_id, "Art direction briefs ready for visual generation", run.output_data.get("content", "")[:500] if run.output_data else ""))
 
     # Stage 4: Visual Generation (Designer + Flux + LoRA)
     if generate_images:
@@ -282,13 +293,26 @@ async def run_creative_pipeline(
                 db.add(img)
             await db.flush()
 
-            # Create a Designer agent run to record the work
+            # Run finishing pipeline on generated images
+            finished_count = 0
+            bible = context.get("brand_bible", {})
+            for r in image_results:
+                if "error" in r:
+                    continue
+                try:
+                    batch_finish(r["filename"], bible)
+                    finished_count += 1
+                    await event_bus.publish_image_generated(project_id, r["filename"], r.get("label", ""))
+                except Exception as fe:
+                    logger.warning(f"Finishing failed for {r.get('filename')}: {fe}")
+
+            successful_count = len([r for r in image_results if "error" not in r])
             designer_run = AgentRun(
                 project_id=project_id,
                 agent_role=AgentRole.DESIGNER,
                 pipeline_stage=PipelineStage.VISUAL_GENERATION,
                 status=RunStatus.COMPLETED,
-                output_data={"content": f"Generated {len([r for r in image_results if 'error' not in r])} images from art direction.", "image_count": len(image_results)},
+                output_data={"content": f"Generated {successful_count} images, finished {finished_count}.", "image_count": successful_count, "finished_count": finished_count},
                 completed_at=datetime.utcnow(),
             )
             db.add(designer_run)
@@ -360,6 +384,7 @@ async def run_creative_pipeline(
                     img.is_rejected = True
                     img.rejection_reason = "; ".join(scores.get("issues", ["Below threshold"]))
                 scored_count += 1
+                await event_bus.publish_quality_scored(project_id, img.id, img.quality_score)
             except Exception as e:
                 logger.error(f"Scoring failed for image {img.id}: {e}")
 

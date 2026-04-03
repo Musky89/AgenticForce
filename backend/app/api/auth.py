@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +13,11 @@ from app.services.auth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 class SetupRequest(BaseModel):
@@ -35,54 +39,38 @@ class UserOut(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db),
-):
-    """Authenticate with email + password, returns JWT token."""
-    result = await db.execute(select(User).where(User.email == form_data.username))
+async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is deactivated",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
 
     token = create_access_token(data={"sub": user.id})
     return TokenResponse(access_token=token)
 
 
-@router.post("/setup", response_model=UserOut, status_code=201)
+@router.post("/setup", response_model=TokenResponse, status_code=201)
 async def setup(payload: SetupRequest, db: AsyncSession = Depends(get_db)):
-    """First-time setup: create the founder account. Only works if no users exist."""
     count_result = await db.execute(select(func.count()).select_from(User))
-    user_count = count_result.scalar()
+    if count_result.scalar() > 0:
+        raise HTTPException(status_code=400, detail="Setup already completed. Use /api/auth/login.")
 
-    if user_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Setup already completed. Use /api/auth/login instead.",
-        )
-
-    user = User(
-        email=payload.email,
-        hashed_password=hash_password(payload.password),
-    )
+    user = User(email=payload.email, hashed_password=hash_password(payload.password))
     db.add(user)
     await db.flush()
     await db.refresh(user)
-    return user
+
+    token = create_access_token(data={"sub": user.id})
+    return TokenResponse(access_token=token)
 
 
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
-    """Get the current authenticated user."""
     return current_user

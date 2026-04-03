@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,3 +50,28 @@ async def update_lora(lora_id: str, data: dict, db: AsyncSession = Depends(get_d
     await db.flush()
     await db.refresh(lora)
     return lora
+
+
+class TrainLoRARequest(BaseModel):
+    images_data_url: str
+    trigger_word: str = "brandx_style"
+    steps: int = 1500
+
+
+@router.post("/{lora_id}/train", response_model=LoRAModelOut)
+async def train_lora_endpoint(lora_id: str, payload: TrainLoRARequest, db: AsyncSession = Depends(get_db)):
+    """Submit a LoRA training job to fal.ai."""
+    lora = await db.get(LoRAModel, lora_id)
+    if not lora:
+        raise HTTPException(404, "LoRA model not found")
+    if lora.status == "training":
+        raise HTTPException(409, "Training already in progress")
+
+    from app.services.lora_training import train_lora
+    updated = await train_lora(
+        db, lora_id,
+        images_data_url=payload.images_data_url,
+        trigger_word=payload.trigger_word,
+        steps=payload.steps,
+    )
+    return updated

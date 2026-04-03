@@ -16,6 +16,7 @@ from app.models.models import (
 from app.services.pipeline import run_single_agent, build_context
 from app.services.image_gen import generate_image, generate_images_from_art_direction
 from app.services.quality_scoring import score_image
+from app.services.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 

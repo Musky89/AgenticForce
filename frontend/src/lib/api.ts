@@ -175,16 +175,16 @@ export const api = {
     const params = new URLSearchParams();
     if (type) params.set("type", type);
     const qs = params.toString();
-    return request<CreativeMemoryEntry[]>(`/memory/client/${clientId}${qs ? `?${qs}` : ""}`);
+    return request<CreativeMemoryEntry[]>(`/creative-memory?client_id=${clientId}${qs ? `&${qs.slice(1)}` : ""}`);
   },
   createMemory: (data: { client_id: string; memory_type: string; content: string; category?: string; effectiveness_score?: number }) =>
-    request<CreativeMemoryEntry>("/memory", { method: "POST", body: JSON.stringify(data) }),
+    request<CreativeMemoryEntry>("/creative-memory", { method: "POST", body: JSON.stringify(data) }),
   deleteMemory: (id: string) =>
-    request<void>(`/memory/${id}`, { method: "DELETE" }),
+    request<void>(`/creative-memory/${id}`, { method: "DELETE" }),
   ingestPerformance: (data: { client_id: string; platform: string; metrics: Record<string, unknown> }) =>
-    request<{ ingested: number }>("/memory/ingest-performance", { method: "POST", body: JSON.stringify(data) }),
+    request<{ ingested: number }>("/creative-memory/ingest-performance", { method: "POST", body: JSON.stringify(data) }),
   getClientInsights: (clientId: string) =>
-    request<{ insights: string[]; patterns: string[] }>(`/memory/client/${clientId}/insights`),
+    request<{ insights: string[]; patterns: string[] }>(`/creative-memory/client/${clientId}/insights`),
 
   // LoRA Training
   trainLora: (loraId: string, data: { images_data_url: string; trigger_word: string; steps?: number }) =>
