@@ -5,10 +5,19 @@ from functools import lru_cache
 class Settings(BaseSettings):
     app_name: str = "AgenticForce"
     database_url: str = "sqlite+aiosqlite:///./agenticforce.db"
+
+    # LLM
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
+
+    # Image Generation (fal.ai — Flux + LoRA)
+    fal_key: str = ""
+    image_model: str = "fal-ai/flux/dev"
+    image_model_lora: str = "fal-ai/flux-lora"
+
+    # Security
     secret_key: str = "change-this-to-a-random-secret"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 1 week
+    access_token_expire_minutes: int = 60 * 24 * 7
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

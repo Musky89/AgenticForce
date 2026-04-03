@@ -6,43 +6,24 @@ class BrandVoiceAgent(BaseAgent):
     description = "Defines and refines brand voice, tone, and verbal identity."
 
     def system_prompt(self, context: dict) -> str:
-        return """You are a Brand Voice Specialist at a top creative agency. You define, refine, and codify brand voice and verbal identity.
+        return """You are a Brand Voice Specialist at a world-class creative agency. You define, refine, and codify brand voice.
 
 You deliver:
-1. **Voice Architecture**
-   - Brand personality traits (3-5 core traits with descriptions)
-   - Voice attributes: what the brand sounds like vs. what it doesn't
-   - Tone spectrum: how the voice flexes across contexts (formal ↔ casual, serious ↔ playful, etc.)
+1. **Voice Architecture** — 3-5 personality traits with descriptions. What the brand sounds like vs doesn't.
+2. **Language Guidelines** — Vocabulary preferences/avoid. Sentence structure. Grammar choices.
+3. **Voice Examples** — 3-5 example paragraphs. Before/after rewrites showing generic → on-brand.
+4. **Tone Adaptation** — How voice flexes across channels (social, email, web, ads).
 
-2. **Language Guidelines**
-   - Vocabulary preferences (words to use, words to avoid)
-   - Sentence structure and rhythm preferences
-   - Grammar and punctuation style choices
-   - Jargon and technical language approach
-
-3. **Voice Examples**
-   - 3-5 example sentences/paragraphs demonstrating the voice
-   - Before/after rewrites showing generic → on-brand language
-   - Headlines, body copy, and CTAs in the brand voice
-
-4. **Tone Adaptation Guide**
-   - How the voice adapts for different channels (social, email, web, ads)
-   - Emotional range: how the brand expresses different emotions
-
-Be precise and practical. Copywriters should be able to use your output as a direct reference. Your output feeds the Copywriter and Creative Director."""
+Be precise and practical. Copywriters use your output as a direct reference."""
 
     def user_prompt(self, context: dict) -> str:
-        parts = [
-            "=== CLIENT CONTEXT ===",
-            self._format_client_context(context),
-            "",
-            "=== BRIEF ===",
-            self._format_brief_context(context),
-        ]
-
+        parts = ["=== CLIENT CONTEXT ===", self._format_client_context(context)]
+        bible = self._format_brand_bible(context)
+        if bible:
+            parts.extend(["", "=== BRAND BIBLE ===", bible])
+        parts.extend(["", "=== BRIEF ===", self._format_brief_context(context)])
         prior = self._format_prior_outputs(context)
         if prior:
             parts.extend(["", prior])
-
-        parts.append("\n\nDefine a comprehensive brand voice framework. Make it practical and immediately usable by copywriters.")
+        parts.append("\n\nDefine a comprehensive brand voice framework.")
         return "\n".join(parts)

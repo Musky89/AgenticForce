@@ -1,3 +1,12 @@
+"""6-Stage Creative Pipeline — mirrors a real agency's process.
+
+Stage 1: Strategic Framing (Strategist)
+Stage 2: Concept Exploration (Creative Director — 10-20 concepts)
+Stage 3: Art Direction (Art Director — detailed visual briefs for top concepts)
+Stage 4: Visual Generation (Designer — Flux + LoRA image generation)
+Stage 5: Refinement (Designer — compositing, finishing)
+Stage 6: Quality Scoring (automated scoring against Brand Bible)
+"""
 import logging
 from datetime import datetime
 from sqlalchemy import select
@@ -5,46 +14,77 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.models import (
-    AgentRole, AgentRun, Brief, Client, Deliverable, GeneratedImage, Project,
-    ProjectStatus, RunStatus,
+    AgentRole, AgentRun, Brief, BrandBible, Client, Deliverable,
+    GeneratedImage, LoRAModel, Project, PipelineStage,
+    ProjectStatus, RunStatus, ServiceBlueprint,
 )
 from app.agents.registry import get_agent
-from app.services.image_gen import generate_images_from_art_direction
+from app.services.creative_memory import get_client_memory_context, auto_capture_from_approval
+from app.services.image_gen import generate_image_flux, generate_images_from_art_direction
+from app.services.quality_scoring import score_image
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PIPELINE = [
+FULL_PIPELINE = [
+    (PipelineStage.STRATEGIC_FRAMING, AgentRole.STRATEGIST),
+    (PipelineStage.CONCEPT_EXPLORATION, AgentRole.CREATIVE_DIRECTOR),
+    (PipelineStage.ART_DIRECTION, AgentRole.ART_DIRECTOR),
+    (PipelineStage.VISUAL_GENERATION, AgentRole.DESIGNER),
+    (PipelineStage.REFINEMENT, AgentRole.COPYWRITER),
+    (PipelineStage.QUALITY_SCORING, AgentRole.QUALITY_SCORER),
+]
+
+# Backward-compatible flat list for individual agent runs
+DEFAULT_AGENT_ORDER = [
     AgentRole.RESEARCHER,
     AgentRole.STRATEGIST,
     AgentRole.BRAND_VOICE,
-    AgentRole.COPYWRITER,
-    AgentRole.ART_DIRECTOR,
     AgentRole.CREATIVE_DIRECTOR,
+    AgentRole.ART_DIRECTOR,
+    AgentRole.COPYWRITER,
+    AgentRole.DESIGNER,
 ]
 
 
-async def _build_context(db: AsyncSession, project_id: str) -> dict:
-    """Build the full context dict for agents from the database."""
+async def build_context(db: AsyncSession, project_id: str) -> dict:
+    """Build the full context dict for agents from the database, including Brand Bible and creative memory."""
     project = await db.get(Project, project_id, options=[selectinload(Project.client)])
     if not project:
         raise ValueError(f"Project {project_id} not found")
 
-    brief_result = await db.execute(
-        select(Brief).where(Brief.project_id == project_id)
-    )
+    brief_result = await db.execute(select(Brief).where(Brief.project_id == project_id))
     brief = brief_result.scalar_one_or_none()
     if not brief:
         raise ValueError(f"No brief found for project {project_id}")
 
     client = project.client
-    return {
+
+    # Load Brand Bible
+    bible_result = await db.execute(select(BrandBible).where(BrandBible.client_id == client.id))
+    bible = bible_result.scalar_one_or_none()
+
+    # Load Service Blueprint
+    bp_result = await db.execute(select(ServiceBlueprint).where(ServiceBlueprint.client_id == client.id))
+    blueprint = bp_result.scalar_one_or_none()
+
+    # Load active LoRA
+    lora_result = await db.execute(
+        select(LoRAModel)
+        .where(LoRAModel.client_id == client.id, LoRAModel.status == "ready")
+        .order_by(LoRAModel.version.desc())
+    )
+    active_lora = lora_result.scalars().first()
+
+    # Load creative memory
+    memory_context = await get_client_memory_context(db, client.id)
+
+    context = {
         "client": {
+            "id": client.id,
             "name": client.name,
             "industry": client.industry,
-            "brand_guidelines": client.brand_guidelines,
-            "tone_keywords": client.tone_keywords,
-            "target_audience": client.target_audience,
         },
+        "brand_bible": _serialize_brand_bible(bible) if bible else {},
         "brief": {
             "objective": brief.objective,
             "deliverables_description": brief.deliverables_description,
@@ -54,8 +94,59 @@ async def _build_context(db: AsyncSession, project_id: str) -> dict:
             "constraints": brief.constraints,
             "inspiration": brief.inspiration,
             "additional_context": brief.additional_context,
+            "desired_emotional_response": brief.desired_emotional_response,
+            "mandatory_inclusions": brief.mandatory_inclusions,
+            "competitive_differentiation": brief.competitive_differentiation,
+            "output_formats": brief.output_formats,
         },
+        "service_blueprint": {
+            "template_type": blueprint.template_type.value if blueprint else None,
+            "active_services": blueprint.active_services if blueprint else None,
+            "quality_thresholds": blueprint.quality_thresholds if blueprint else None,
+        } if blueprint else {},
+        "lora": {
+            "model_id": active_lora.id,
+            "weights_url": active_lora.weights_url,
+            "trigger_word": active_lora.trigger_word,
+        } if active_lora else None,
+        "creative_memory": memory_context,
         "prior_outputs": {},
+    }
+
+    return context
+
+
+def _serialize_brand_bible(bible: BrandBible) -> dict:
+    return {
+        "brand_essence": bible.brand_essence,
+        "mission": bible.mission,
+        "vision": bible.vision,
+        "values": bible.values,
+        "positioning_statement": bible.positioning_statement,
+        "unique_selling_proposition": bible.unique_selling_proposition,
+        "primary_audience": bible.primary_audience,
+        "secondary_audience": bible.secondary_audience,
+        "audience_personas": bible.audience_personas,
+        "color_palette": bible.color_palette,
+        "typography": bible.typography,
+        "photography_style": bible.photography_style,
+        "illustration_style": bible.illustration_style,
+        "composition_rules": bible.composition_rules,
+        "logo_usage": bible.logo_usage,
+        "visual_dos": bible.visual_dos,
+        "visual_donts": bible.visual_donts,
+        "tone_of_voice": bible.tone_of_voice,
+        "voice_attributes": bible.voice_attributes,
+        "vocabulary_preferences": bible.vocabulary_preferences,
+        "vocabulary_avoid": bible.vocabulary_avoid,
+        "headline_style": bible.headline_style,
+        "copy_style": bible.copy_style,
+        "competitors": bible.competitors,
+        "differentiation": bible.differentiation,
+        "social_guidelines": bible.social_guidelines,
+        "email_guidelines": bible.email_guidelines,
+        "print_guidelines": bible.print_guidelines,
+        "web_guidelines": bible.web_guidelines,
     }
 
 
@@ -64,13 +155,14 @@ async def run_single_agent(
     project_id: str,
     agent_role: AgentRole,
     input_data: dict | None = None,
+    pipeline_stage: PipelineStage | None = None,
 ) -> AgentRun:
-    """Run a single agent against a project."""
-    context = await _build_context(db, project_id)
+    """Run a single agent against a project with full Brand Bible context."""
+    context = await build_context(db, project_id)
     if input_data:
         context["input_data"] = input_data
 
-    # Load prior outputs from completed runs on this project
+    # Load prior outputs from completed runs
     prior_runs = await db.execute(
         select(AgentRun)
         .where(AgentRun.project_id == project_id, AgentRun.status == RunStatus.COMPLETED)
@@ -85,6 +177,7 @@ async def run_single_agent(
     agent_run = AgentRun(
         project_id=project_id,
         agent_role=agent_role,
+        pipeline_stage=pipeline_stage,
         status=RunStatus.RUNNING,
         input_data=input_data,
     )
@@ -99,12 +192,14 @@ async def run_single_agent(
         agent_run.duration_seconds = result.get("duration_seconds")
         agent_run.completed_at = datetime.utcnow()
 
+        stage_label = pipeline_stage.value.replace("_", " ").title() if pipeline_stage else agent_role.value.replace("_", " ").title()
         deliverable = Deliverable(
             project_id=project_id,
             agent_run_id=agent_run.id,
-            title=f"{agent_role.value.replace('_', ' ').title()} Output",
+            title=f"{stage_label} — {agent_role.value.replace('_', ' ').title()}",
             content_type=agent_role.value,
             content=result["content"],
+            pipeline_stage=pipeline_stage.value if pipeline_stage else None,
         )
         db.add(deliverable)
 
@@ -118,45 +213,162 @@ async def run_single_agent(
     return agent_run
 
 
-async def generate_images_for_project(
+async def run_creative_pipeline(
     db: AsyncSession,
     project_id: str,
-    agent_run_id: str,
-    art_direction_text: str,
-) -> list[GeneratedImage]:
-    """Generate images from art direction output and save to database."""
-    results = await generate_images_from_art_direction(art_direction_text)
-    images = []
-    for r in results:
-        if "error" in r:
-            logger.warning(f"Image gen failed for '{r.get('label')}': {r['error']}")
-            continue
-        img = GeneratedImage(
-            project_id=project_id,
-            agent_run_id=agent_run_id,
-            filename=r["filename"],
-            prompt=r["prompt"],
-            revised_prompt=r.get("revised_prompt"),
-            label=r.get("label", "Art Direction Image"),
-            size=r["size"],
-            quality=r["quality"],
-            style=r["style"],
-        )
-        db.add(img)
-        images.append(img)
+    generate_images: bool = True,
+    run_quality_scoring: bool = True,
+) -> list[AgentRun]:
+    """Execute the full 6-stage creative pipeline."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+
+    project.status = ProjectStatus.IN_PROGRESS
     await db.flush()
-    return images
+
+    runs: list[AgentRun] = []
+
+    # Stage 1: Strategic Framing
+    logger.info("Pipeline Stage 1: Strategic Framing")
+    run = await run_single_agent(db, project_id, AgentRole.STRATEGIST, pipeline_stage=PipelineStage.STRATEGIC_FRAMING)
+    runs.append(run)
+    if run.status == RunStatus.FAILED:
+        return runs
+
+    # Stage 2: Concept Exploration (Creative Director generates 10-20 concepts)
+    logger.info("Pipeline Stage 2: Concept Exploration")
+    run = await run_single_agent(
+        db, project_id, AgentRole.CREATIVE_DIRECTOR,
+        input_data={"mode": "concept_exploration", "num_concepts": 15},
+        pipeline_stage=PipelineStage.CONCEPT_EXPLORATION,
+    )
+    runs.append(run)
+    if run.status == RunStatus.FAILED:
+        return runs
+
+    # Stage 3: Art Direction (detailed visual briefs for top concepts)
+    logger.info("Pipeline Stage 3: Art Direction")
+    run = await run_single_agent(
+        db, project_id, AgentRole.ART_DIRECTOR,
+        pipeline_stage=PipelineStage.ART_DIRECTION,
+    )
+    runs.append(run)
+    if run.status == RunStatus.FAILED:
+        return runs
+
+    # Stage 4: Visual Generation (Designer + Flux + LoRA)
+    if generate_images:
+        logger.info("Pipeline Stage 4: Visual Generation")
+        context = await build_context(db, project_id)
+        art_direction_text = run.output_data.get("content", "") if run.output_data else ""
+        lora_url = context["lora"]["weights_url"] if context.get("lora") else None
+
+        try:
+            image_results = await generate_images_from_art_direction(art_direction_text, lora_url=lora_url)
+
+            for r in image_results:
+                if "error" in r:
+                    continue
+                img = GeneratedImage(
+                    project_id=project_id,
+                    agent_run_id=run.id,
+                    filename=r["filename"],
+                    prompt=r["prompt"],
+                    label=r.get("label", "Pipeline Image"),
+                    size=f"{r.get('width', 1024)}x{r.get('height', 1024)}",
+                    lora_model_id=context["lora"]["model_id"] if context.get("lora") else None,
+                )
+                db.add(img)
+            await db.flush()
+
+            # Create a Designer agent run to record the work
+            designer_run = AgentRun(
+                project_id=project_id,
+                agent_role=AgentRole.DESIGNER,
+                pipeline_stage=PipelineStage.VISUAL_GENERATION,
+                status=RunStatus.COMPLETED,
+                output_data={"content": f"Generated {len([r for r in image_results if 'error' not in r])} images from art direction.", "image_count": len(image_results)},
+                completed_at=datetime.utcnow(),
+            )
+            db.add(designer_run)
+            runs.append(designer_run)
+            await db.flush()
+        except Exception as e:
+            logger.error(f"Visual generation failed: {e}")
+            designer_run = AgentRun(
+                project_id=project_id,
+                agent_role=AgentRole.DESIGNER,
+                pipeline_stage=PipelineStage.VISUAL_GENERATION,
+                status=RunStatus.FAILED,
+                error_message=str(e),
+                completed_at=datetime.utcnow(),
+            )
+            db.add(designer_run)
+            runs.append(designer_run)
+            await db.flush()
+
+    # Stage 5: Refinement (Copywriter for headlines, CTAs, channel-specific copy)
+    logger.info("Pipeline Stage 5: Refinement — Copy")
+    run = await run_single_agent(
+        db, project_id, AgentRole.COPYWRITER,
+        pipeline_stage=PipelineStage.REFINEMENT,
+    )
+    runs.append(run)
+
+    # Stage 6: Quality Scoring
+    if run_quality_scoring:
+        logger.info("Pipeline Stage 6: Quality Scoring")
+        context = await build_context(db, project_id)
+        bible = context.get("brand_bible", {})
+        brief_ctx = context.get("brief", {})
+        thresholds = context.get("service_blueprint", {}).get("quality_thresholds")
+
+        image_results = await db.execute(
+            select(GeneratedImage)
+            .where(GeneratedImage.project_id == project_id, GeneratedImage.quality_score.is_(None))
+        )
+        scored_count = 0
+        for img in image_results.scalars():
+            try:
+                scores = await score_image(img.filename, img.prompt, bible, brief_ctx, thresholds)
+                img.quality_score = scores.get("composite_score", 0)
+                img.quality_breakdown = scores
+                if not scores.get("passed", False):
+                    img.is_rejected = True
+                    img.rejection_reason = "; ".join(scores.get("issues", ["Below threshold"]))
+                scored_count += 1
+            except Exception as e:
+                logger.error(f"Scoring failed for image {img.id}: {e}")
+
+        scorer_run = AgentRun(
+            project_id=project_id,
+            agent_role=AgentRole.QUALITY_SCORER,
+            pipeline_stage=PipelineStage.QUALITY_SCORING,
+            status=RunStatus.COMPLETED,
+            output_data={"content": f"Scored {scored_count} images against Brand Bible.", "scored_count": scored_count},
+            completed_at=datetime.utcnow(),
+        )
+        db.add(scorer_run)
+        runs.append(scorer_run)
+        await db.flush()
+
+    all_succeeded = all(r.status == RunStatus.COMPLETED for r in runs)
+    project.status = ProjectStatus.REVIEW if all_succeeded else ProjectStatus.IN_PROGRESS
+    await db.flush()
+
+    return runs
 
 
-async def run_pipeline(
+async def run_agent_pipeline(
     db: AsyncSession,
     project_id: str,
     agents: list[AgentRole] | None = None,
     generate_images: bool = False,
 ) -> list[AgentRun]:
-    """Run a full pipeline of agents sequentially, each building on prior outputs."""
+    """Run a list of agents sequentially (simpler than the full 6-stage pipeline)."""
     if agents is None:
-        agents = DEFAULT_PIPELINE
+        agents = DEFAULT_AGENT_ORDER
 
     project = await db.get(Project, project_id)
     if not project:
@@ -167,24 +379,36 @@ async def run_pipeline(
 
     runs: list[AgentRun] = []
     for role in agents:
+        if role == AgentRole.DESIGNER and generate_images:
+            # For Designer, trigger image generation instead of text
+            context = await build_context(db, project_id)
+            lora_url = context["lora"]["weights_url"] if context.get("lora") else None
+
+            # Get art direction from prior runs
+            art_text = context["prior_outputs"].get("art_director", "")
+            if art_text:
+                try:
+                    image_results = await generate_images_from_art_direction(art_text, lora_url=lora_url)
+                    for r in image_results:
+                        if "error" not in r:
+                            img = GeneratedImage(
+                                project_id=project_id, filename=r["filename"],
+                                prompt=r["prompt"], label=r.get("label"),
+                                size=f"{r.get('width', 1024)}x{r.get('height', 1024)}",
+                            )
+                            db.add(img)
+                    await db.flush()
+                except Exception as e:
+                    logger.error(f"Image generation failed: {e}")
+            continue
+
+        if role == AgentRole.QUALITY_SCORER:
+            continue  # Handled separately
+
         run = await run_single_agent(db, project_id, role)
         runs.append(run)
         if run.status == RunStatus.FAILED:
-            logger.warning(f"Pipeline stopping: {role.value} failed")
             break
-
-        if (
-            generate_images
-            and role == AgentRole.ART_DIRECTOR
-            and run.status == RunStatus.COMPLETED
-            and run.output_data
-        ):
-            try:
-                art_text = run.output_data.get("content", "")
-                await generate_images_for_project(db, project_id, run.id, art_text)
-                logger.info("Auto-generated images from art direction")
-            except Exception as e:
-                logger.error(f"Auto image generation failed: {e}")
 
     all_succeeded = all(r.status == RunStatus.COMPLETED for r in runs)
     project.status = ProjectStatus.REVIEW if all_succeeded else ProjectStatus.IN_PROGRESS

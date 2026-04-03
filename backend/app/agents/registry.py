@@ -6,6 +6,7 @@ from app.agents.brand_voice import BrandVoiceAgent
 from app.agents.copywriter import CopywriterAgent
 from app.agents.art_director import ArtDirectorAgent
 from app.agents.creative_director import CreativeDirectorAgent
+from app.agents.designer import DesignerAgent
 
 AGENT_REGISTRY: dict[AgentRole, type[BaseAgent]] = {
     AgentRole.RESEARCHER: ResearcherAgent,
@@ -14,6 +15,7 @@ AGENT_REGISTRY: dict[AgentRole, type[BaseAgent]] = {
     AgentRole.COPYWRITER: CopywriterAgent,
     AgentRole.ART_DIRECTOR: ArtDirectorAgent,
     AgentRole.CREATIVE_DIRECTOR: CreativeDirectorAgent,
+    AgentRole.DESIGNER: DesignerAgent,
 }
 
 

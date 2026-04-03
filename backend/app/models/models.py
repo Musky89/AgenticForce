@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, ForeignKey, Enum as SAEnum, JSON, Float
+from sqlalchemy import String, Text, DateTime, ForeignKey, Enum as SAEnum, JSON, Float, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 import enum
@@ -9,6 +9,8 @@ import enum
 def gen_uuid() -> str:
     return str(uuid.uuid4())
 
+
+# --- Enums ---
 
 class ProjectStatus(str, enum.Enum):
     DRAFT = "draft"
@@ -21,12 +23,19 @@ class ProjectStatus(str, enum.Enum):
 
 
 class AgentRole(str, enum.Enum):
-    CREATIVE_DIRECTOR = "creative_director"
     STRATEGIST = "strategist"
-    COPYWRITER = "copywriter"
+    CREATIVE_DIRECTOR = "creative_director"
     ART_DIRECTOR = "art_director"
+    DESIGNER = "designer"
+    COPYWRITER = "copywriter"
     RESEARCHER = "researcher"
     BRAND_VOICE = "brand_voice"
+    QUALITY_SCORER = "quality_scorer"
+    COMMUNITY_MANAGER = "community_manager"
+    MEDIA_BUYER = "media_buyer"
+    EMAIL_SPECIALIST = "email_specialist"
+    SEO_SPECIALIST = "seo_specialist"
+    PRODUCER = "producer"
 
 
 class RunStatus(str, enum.Enum):
@@ -36,6 +45,26 @@ class RunStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class BlueprintTemplate(str, enum.Enum):
+    SOCIAL_FIRST = "social_first"
+    PERFORMANCE = "performance"
+    CONTENT_LED = "content_led"
+    NEW_BRAND = "new_brand"
+    TRADITIONAL_MEDIA = "traditional_media"
+    FULL_SERVICE = "full_service"
+
+
+class PipelineStage(str, enum.Enum):
+    STRATEGIC_FRAMING = "strategic_framing"
+    CONCEPT_EXPLORATION = "concept_exploration"
+    ART_DIRECTION = "art_direction"
+    VISUAL_GENERATION = "visual_generation"
+    REFINEMENT = "refinement"
+    QUALITY_SCORING = "quality_scoring"
+
+
+# --- Models ---
+
 class Client(Base):
     __tablename__ = "clients"
 
@@ -43,14 +72,115 @@ class Client(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     industry: Mapped[str | None] = mapped_column(String(255))
     website: Mapped[str | None] = mapped_column(String(512))
-    brand_guidelines: Mapped[str | None] = mapped_column(Text)
-    tone_keywords: Mapped[str | None] = mapped_column(Text)
-    target_audience: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     projects: Mapped[list["Project"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+    brand_bible: Mapped["BrandBible | None"] = relationship(back_populates="client", uselist=False, cascade="all, delete-orphan")
+    service_blueprint: Mapped["ServiceBlueprint | None"] = relationship(back_populates="client", uselist=False, cascade="all, delete-orphan")
+    lora_models: Mapped[list["LoRAModel"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+
+
+class BrandBible(Base):
+    """Structured brand context that feeds every agent — the brand's DNA encoded as data."""
+    __tablename__ = "brand_bibles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), unique=True, nullable=False)
+
+    # Brand Positioning
+    brand_essence: Mapped[str | None] = mapped_column(Text)
+    mission: Mapped[str | None] = mapped_column(Text)
+    vision: Mapped[str | None] = mapped_column(Text)
+    values: Mapped[str | None] = mapped_column(Text)
+    positioning_statement: Mapped[str | None] = mapped_column(Text)
+    unique_selling_proposition: Mapped[str | None] = mapped_column(Text)
+
+    # Target Audience
+    primary_audience: Mapped[str | None] = mapped_column(Text)
+    secondary_audience: Mapped[str | None] = mapped_column(Text)
+    audience_personas: Mapped[dict | None] = mapped_column(JSON)
+
+    # Visual Identity
+    color_palette: Mapped[dict | None] = mapped_column(JSON)  # {primary: [], secondary: [], accent: []}
+    typography: Mapped[dict | None] = mapped_column(JSON)  # {headings: {}, body: {}, accent: {}}
+    photography_style: Mapped[str | None] = mapped_column(Text)
+    illustration_style: Mapped[str | None] = mapped_column(Text)
+    composition_rules: Mapped[str | None] = mapped_column(Text)
+    logo_usage: Mapped[str | None] = mapped_column(Text)
+    visual_dos: Mapped[str | None] = mapped_column(Text)
+    visual_donts: Mapped[str | None] = mapped_column(Text)
+
+    # Verbal Identity
+    tone_of_voice: Mapped[str | None] = mapped_column(Text)
+    voice_attributes: Mapped[dict | None] = mapped_column(JSON)  # {is: [], is_not: []}
+    vocabulary_preferences: Mapped[str | None] = mapped_column(Text)
+    vocabulary_avoid: Mapped[str | None] = mapped_column(Text)
+    headline_style: Mapped[str | None] = mapped_column(Text)
+    copy_style: Mapped[str | None] = mapped_column(Text)
+
+    # Competitive Landscape
+    competitors: Mapped[dict | None] = mapped_column(JSON)
+    differentiation: Mapped[str | None] = mapped_column(Text)
+
+    # Channel-Specific Guidelines
+    social_guidelines: Mapped[dict | None] = mapped_column(JSON)
+    email_guidelines: Mapped[dict | None] = mapped_column(JSON)
+    print_guidelines: Mapped[dict | None] = mapped_column(JSON)
+    web_guidelines: Mapped[dict | None] = mapped_column(JSON)
+
+    # Metadata
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    client: Mapped["Client"] = relationship(back_populates="brand_bible")
+
+
+class ServiceBlueprint(Base):
+    """Machine-readable retainer agreement — defines what the platform does for each client."""
+    __tablename__ = "service_blueprints"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), unique=True, nullable=False)
+    template_type: Mapped[BlueprintTemplate] = mapped_column(SAEnum(BlueprintTemplate), nullable=False)
+
+    active_services: Mapped[dict | None] = mapped_column(JSON)  # [{service, cadence, output_specs, agents}]
+    recurring_briefs: Mapped[dict | None] = mapped_column(JSON)  # [{schedule, template, params}]
+    quality_thresholds: Mapped[dict | None] = mapped_column(JSON)  # {color: 15, clip: 0.75, ...}
+    budget_params: Mapped[dict | None] = mapped_column(JSON)  # {monthly_media, freelancer_cap}
+    special_pipelines: Mapped[dict | None] = mapped_column(JSON)  # [{garment_compositing, print_production}]
+    approval_rules: Mapped[dict | None] = mapped_column(JSON)  # {auto_publish: [], founder_review: []}
+    lora_config: Mapped[dict | None] = mapped_column(JSON)  # {model_id, retraining_schedule}
+    integrations: Mapped[dict | None] = mapped_column(JSON)  # {meta: {}, google: {}, mailchimp: {}}
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    client: Mapped["Client"] = relationship(back_populates="service_blueprint")
+
+
+class LoRAModel(Base):
+    """Per-client fine-tuned LoRA model — the brand's visual DNA at the model weight level."""
+    __tablename__ = "lora_models"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="pending")  # pending, training, ready, failed
+    base_model: Mapped[str] = mapped_column(String(255), default="fal-ai/flux-lora")
+    training_data_path: Mapped[str | None] = mapped_column(String(512))
+    weights_url: Mapped[str | None] = mapped_column(String(512))
+    trigger_word: Mapped[str | None] = mapped_column(String(100))
+    training_steps: Mapped[int | None] = mapped_column(Integer)
+    training_images_count: Mapped[int | None] = mapped_column(Integer)
+    training_config: Mapped[dict | None] = mapped_column(JSON)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_trained_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    client: Mapped["Client"] = relationship(back_populates="lora_models")
 
 
 class Project(Base):
@@ -59,9 +189,7 @@ class Project(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    status: Mapped[ProjectStatus] = mapped_column(
-        SAEnum(ProjectStatus), default=ProjectStatus.DRAFT
-    )
+    status: Mapped[ProjectStatus] = mapped_column(SAEnum(ProjectStatus), default=ProjectStatus.DRAFT)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -69,6 +197,7 @@ class Project(Base):
     brief: Mapped["Brief | None"] = relationship(back_populates="project", uselist=False, cascade="all, delete-orphan")
     agent_runs: Mapped[list["AgentRun"]] = relationship(back_populates="project", cascade="all, delete-orphan")
     deliverables: Mapped[list["Deliverable"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+    generated_images: Mapped[list["GeneratedImage"]] = relationship(back_populates="project", cascade="all, delete-orphan")
 
 
 class Brief(Base):
@@ -85,6 +214,10 @@ class Brief(Base):
     inspiration: Mapped[str | None] = mapped_column(Text)
     budget_notes: Mapped[str | None] = mapped_column(Text)
     additional_context: Mapped[str | None] = mapped_column(Text)
+    desired_emotional_response: Mapped[str | None] = mapped_column(Text)
+    mandatory_inclusions: Mapped[str | None] = mapped_column(Text)
+    competitive_differentiation: Mapped[str | None] = mapped_column(Text)
+    output_formats: Mapped[dict | None] = mapped_column(JSON)  # [{format, dimensions, platform}]
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -97,6 +230,7 @@ class AgentRun(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
     agent_role: Mapped[AgentRole] = mapped_column(SAEnum(AgentRole), nullable=False)
+    pipeline_stage: Mapped[PipelineStage | None] = mapped_column(SAEnum(PipelineStage))
     status: Mapped[RunStatus] = mapped_column(SAEnum(RunStatus), default=RunStatus.QUEUED)
     input_data: Mapped[dict | None] = mapped_column(JSON)
     output_data: Mapped[dict | None] = mapped_column(JSON)
@@ -122,10 +256,18 @@ class GeneratedImage(Base):
     size: Mapped[str] = mapped_column(String(20), default="1024x1024")
     quality: Mapped[str] = mapped_column(String(20), default="standard")
     style: Mapped[str] = mapped_column(String(20), default="vivid")
+    lora_model_id: Mapped[str | None] = mapped_column(ForeignKey("lora_models.id"))
+    # Quality scoring fields
+    quality_score: Mapped[float | None] = mapped_column(Float)
+    quality_breakdown: Mapped[dict | None] = mapped_column(JSON)  # {color: 9, composition: 8, ...}
+    is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_rejected: Mapped[bool] = mapped_column(Boolean, default=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    project: Mapped["Project | None"] = relationship()
+    project: Mapped["Project | None"] = relationship(back_populates="generated_images")
     agent_run: Mapped["AgentRun | None"] = relationship()
+    lora_model: Mapped["LoRAModel | None"] = relationship()
 
 
 class Deliverable(Base):
@@ -141,7 +283,24 @@ class Deliverable(Base):
     is_approved: Mapped[bool] = mapped_column(default=False)
     feedback: Mapped[str | None] = mapped_column(Text)
     metadata_json: Mapped[dict | None] = mapped_column(JSON)
+    pipeline_stage: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     project: Mapped["Project"] = relationship(back_populates="deliverables")
     agent_run: Mapped["AgentRun | None"] = relationship()
+
+
+class CreativeMemory(Base):
+    """Performance-linked creative memory — compounds over time."""
+    __tablename__ = "creative_memory"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    memory_type: Mapped[str] = mapped_column(String(50), nullable=False)  # prompt, style, performance, pattern
+    category: Mapped[str | None] = mapped_column(String(100))
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON)
+    effectiveness_score: Mapped[float | None] = mapped_column(Float)
+    times_used: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

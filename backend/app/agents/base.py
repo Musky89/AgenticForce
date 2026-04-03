@@ -20,12 +20,10 @@ class BaseAgent(ABC):
 
     @abstractmethod
     def system_prompt(self, context: dict) -> str:
-        """Return the system prompt for this agent given the project context."""
         ...
 
     @abstractmethod
     def user_prompt(self, context: dict) -> str:
-        """Return the user prompt for this agent given the project context."""
         ...
 
     def _format_client_context(self, context: dict) -> str:
@@ -33,32 +31,89 @@ class BaseAgent(ABC):
         parts = [f"Client: {client.get('name', 'Unknown')}"]
         if client.get("industry"):
             parts.append(f"Industry: {client['industry']}")
-        if client.get("brand_guidelines"):
-            parts.append(f"Brand Guidelines: {client['brand_guidelines']}")
-        if client.get("tone_keywords"):
-            parts.append(f"Tone Keywords: {client['tone_keywords']}")
-        if client.get("target_audience"):
-            parts.append(f"Target Audience: {client['target_audience']}")
         return "\n".join(parts)
+
+    def _format_brand_bible(self, context: dict) -> str:
+        """Format the Brand Bible into a rich context string for agent consumption."""
+        bible = context.get("brand_bible", {})
+        if not bible:
+            return ""
+
+        sections = []
+
+        # Positioning
+        pos_fields = [
+            ("brand_essence", "Brand Essence"),
+            ("positioning_statement", "Positioning"),
+            ("unique_selling_proposition", "USP"),
+            ("mission", "Mission"),
+            ("vision", "Vision"),
+            ("values", "Values"),
+        ]
+        pos = [f"{label}: {bible[k]}" for k, label in pos_fields if bible.get(k)]
+        if pos:
+            sections.append("BRAND POSITIONING\n" + "\n".join(pos))
+
+        # Audience
+        aud_fields = [("primary_audience", "Primary Audience"), ("secondary_audience", "Secondary Audience")]
+        aud = [f"{label}: {bible[k]}" for k, label in aud_fields if bible.get(k)]
+        if aud:
+            sections.append("TARGET AUDIENCE\n" + "\n".join(aud))
+
+        # Visual Identity
+        vis = []
+        if bible.get("color_palette"):
+            palette = bible["color_palette"]
+            vis.append(f"Color Palette: Primary {palette.get('primary', [])}, Secondary {palette.get('secondary', [])}, Accent {palette.get('accent', [])}")
+        if bible.get("typography"):
+            vis.append(f"Typography: {bible['typography']}")
+        for k, label in [("photography_style", "Photography Style"), ("illustration_style", "Illustration Style"),
+                          ("composition_rules", "Composition Rules"), ("visual_dos", "Visual Do's"),
+                          ("visual_donts", "Visual Don'ts"), ("logo_usage", "Logo Usage")]:
+            if bible.get(k):
+                vis.append(f"{label}: {bible[k]}")
+        if vis:
+            sections.append("VISUAL IDENTITY\n" + "\n".join(vis))
+
+        # Verbal Identity
+        verb = []
+        for k, label in [("tone_of_voice", "Tone of Voice"), ("headline_style", "Headline Style"),
+                          ("copy_style", "Copy Style"), ("vocabulary_preferences", "Preferred Words"),
+                          ("vocabulary_avoid", "Words to Avoid")]:
+            if bible.get(k):
+                verb.append(f"{label}: {bible[k]}")
+        if bible.get("voice_attributes"):
+            va = bible["voice_attributes"]
+            verb.append(f"Voice Is: {', '.join(va.get('is', []))}")
+            verb.append(f"Voice Is Not: {', '.join(va.get('is_not', []))}")
+        if verb:
+            sections.append("VERBAL IDENTITY\n" + "\n".join(verb))
+
+        # Competitive
+        if bible.get("differentiation"):
+            sections.append(f"COMPETITIVE DIFFERENTIATION\n{bible['differentiation']}")
+
+        return "\n\n".join(sections)
 
     def _format_brief_context(self, context: dict) -> str:
         brief = context.get("brief", {})
-        parts = [f"Objective: {brief.get('objective', 'Not specified')}"]
-        if brief.get("deliverables_description"):
-            parts.append(f"Deliverables: {brief['deliverables_description']}")
-        if brief.get("target_audience"):
-            parts.append(f"Target Audience: {brief['target_audience']}")
-        if brief.get("key_messages"):
-            parts.append(f"Key Messages: {brief['key_messages']}")
-        if brief.get("tone"):
-            parts.append(f"Tone: {brief['tone']}")
-        if brief.get("constraints"):
-            parts.append(f"Constraints: {brief['constraints']}")
-        if brief.get("inspiration"):
-            parts.append(f"Inspiration: {brief['inspiration']}")
-        if brief.get("additional_context"):
-            parts.append(f"Additional Context: {brief['additional_context']}")
-        return "\n".join(parts)
+        fields = [
+            ("objective", "Objective"),
+            ("deliverables_description", "Deliverables"),
+            ("target_audience", "Target Audience"),
+            ("key_messages", "Key Messages"),
+            ("tone", "Tone"),
+            ("constraints", "Constraints"),
+            ("inspiration", "Inspiration"),
+            ("additional_context", "Additional Context"),
+            ("desired_emotional_response", "Desired Emotional Response"),
+            ("mandatory_inclusions", "Mandatory Inclusions"),
+            ("competitive_differentiation", "Competitive Differentiation"),
+        ]
+        parts = [f"{label}: {brief[k]}" for k, label in fields if brief.get(k)]
+        if brief.get("output_formats"):
+            parts.append(f"Output Formats: {brief['output_formats']}")
+        return "\n".join(parts) if parts else "No brief provided."
 
     def _format_prior_outputs(self, context: dict) -> str:
         prior = context.get("prior_outputs", {})

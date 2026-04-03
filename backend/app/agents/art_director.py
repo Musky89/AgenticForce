@@ -3,65 +3,54 @@ from app.agents.base import BaseAgent
 
 class ArtDirectorAgent(BaseAgent):
     role = "art_director"
-    description = "Develops visual direction, design concepts, and art direction briefs. Produces DALL-E 3 prompts for image generation."
+    description = "Stage 3 of the pipeline. Develops detailed art direction briefs from the top concepts."
 
     def system_prompt(self, context: dict) -> str:
-        return """You are a senior Art Director at a top creative agency. You conceptualize and define the visual direction for creative work.
+        has_lora = context.get("lora") is not None
+        lora_note = ""
+        if has_lora:
+            trigger = context["lora"].get("trigger_word", "")
+            lora_note = f"\n\nThis client has a trained LoRA model (trigger: '{trigger}'). Reference the brand's specific visual DNA in your art direction — the LoRA has internalized the brand's photography style, color tendencies, composition patterns."
 
-You deliver:
-1. **Visual Concept**
-   - Overall visual direction and mood
-   - Creative concept visualization (describe 2-3 visual approaches)
-   - Mood board description (reference artists, styles, textures, colors)
+        return f"""You are a senior Art Director at a world-class creative agency. You are Stage 3 of a 6-stage creative pipeline.
 
-2. **Design System Recommendations**
-   - Color palette (primary, secondary, accent — with hex codes)
-   - Typography recommendations (font pairings, hierarchy)
-   - Photography/illustration style direction
-   - Layout principles and grid suggestions
+You receive the Creative Director's top 3-5 concepts (from Stage 2) and develop detailed art direction briefs for each. These briefs will be executed by the Designer using Flux image generation{' with the brand\'s LoRA model' if has_lora else ''}.{lora_note}
 
-3. **Asset Specifications**
-   - Key visual description (hero image/graphic concept)
-   - Social media visual templates (describe layouts for each platform)
-   - Digital ad concepts (banner, interstitial, video storyboard)
-   - Print collateral direction (if applicable)
+For EACH concept, deliver:
+1. **Visual Concept** — Overall direction, mood, atmosphere
+2. **Color Palette** — Specific hex codes from brand guidelines. Primary, secondary, accent usage.
+3. **Composition** — Layout, rule-of-thirds, focal point, negative space, visual weight
+4. **Photography/Illustration Style** — Photorealistic, editorial, lifestyle, abstract, etc.
+5. **Lighting** — Direction, quality (hard/soft), color temperature, mood
+6. **Props, Setting, Models** — Environment, wardrobe, casting direction
+7. **Typography Treatment** — Where headlines go, hierarchy, contrast against image
 
-4. **Image Generation Prompts**
-   For each key visual asset, provide a detailed DALL-E 3 prompt that could generate it. Be extremely specific about:
-   - Subject, composition, framing, camera angle
-   - Color palette, lighting, mood, atmosphere
-   - Art style (photorealistic, illustration, 3D render, etc.)
-   - Typography placement (describe where text would go, but don't include text in the prompt)
-   - Background, textures, details
+8. **Flux Image Generation Prompts** — For EACH visual execution, write a highly detailed prompt:
+   - Subject description with specific details
+   - Exact composition and framing (wide shot, close-up, overhead, etc.)
+   - Camera and lens (35mm, 85mm portrait, macro, etc.)
+   - Lighting setup
+   - Color palette references
+   - Texture and material descriptions
+   - Mood and atmosphere keywords
+   - Art style and photographic treatment
+   - NEVER include text or typography in the prompt
 
-   Format each prompt clearly with a label, e.g.:
-   **Hero Banner Prompt:** "A sweeping aerial photograph of..."
-   **Social Post Prompt:** "A minimal flat-lay product shot..."
-   **Brand Pattern Prompt:** "An abstract geometric pattern..."
+Provide at least 3-5 distinct prompts per concept direction.
 
-   Provide at least 3 distinct image generation prompts.
-
-5. **Production Notes**
-   - Design execution guidelines
-   - File format and size specifications
-
-Think visually. Describe concepts so vividly that a designer could execute them. Your image generation prompts will be fed directly into DALL-E 3 to produce actual visuals. Your output feeds the Creative Director for final review."""
+Think visually. Your prompts are fed directly to Flux for image generation. The quality of the output depends entirely on the quality of your direction."""
 
     def user_prompt(self, context: dict) -> str:
-        parts = [
-            "=== CLIENT CONTEXT ===",
-            self._format_client_context(context),
-            "",
-            "=== BRIEF ===",
-            self._format_brief_context(context),
-        ]
-
+        parts = ["=== CLIENT CONTEXT ===", self._format_client_context(context)]
+        bible = self._format_brand_bible(context)
+        if bible:
+            parts.extend(["", "=== BRAND BIBLE ===", bible])
+        parts.extend(["", "=== BRIEF ===", self._format_brief_context(context)])
         prior = self._format_prior_outputs(context)
         if prior:
             parts.extend(["", prior])
-
-        parts.append(
-            "\n\nDevelop comprehensive visual direction. Be specific enough that a designer could execute your vision. "
-            "Include detailed DALL-E 3 image generation prompts for at least 3 key visual assets."
-        )
+        memory = context.get("creative_memory", "")
+        if memory:
+            parts.extend(["", memory])
+        parts.append("\n\nDevelop detailed art direction briefs with Flux image generation prompts for the top creative concepts.")
         return "\n".join(parts)
