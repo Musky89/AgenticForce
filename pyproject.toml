@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-creative-agency"
+version = "0.1.0"
+description = "Solo-operated multi-agent creative pipeline: strategy → concepts → copy → QA"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "You" }]
+dependencies = [
+  "openai>=1.40.0",
+  "pyyaml>=6.0.1",
+  "typer>=0.12.0",
+  "rich>=13.7.0",
+  "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "ruff>=0.6.0"]
+
+[project.scripts]
+agency = "agency.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agency"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
