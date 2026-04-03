@@ -18,6 +18,8 @@ import {
   Download,
   Sparkles,
   Wand2,
+  GitBranch,
+  FileDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -273,7 +275,33 @@ export default function ProjectDetailPage() {
                 )}
                 Run Full Pipeline
               </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await api.decomposeBrief(projectId);
+                    toast.success("Brief decomposed into task graph");
+                    load();
+                  } catch { toast.error("Failed to decompose"); }
+                }}
+              >
+                <GitBranch className="h-4 w-4 mr-2" />
+                Orchestrate
+              </Button>
             </>
+          )}
+          {completedRuns.length > 0 && (
+            <div className="flex gap-1">
+              <a href={api.exportStrategyPdf(projectId)} target="_blank" rel="noopener">
+                <Button variant="ghost" size="sm"><FileDown className="h-3.5 w-3.5 mr-1" />Strategy PDF</Button>
+              </a>
+              <a href={api.exportConceptsPptx(projectId)} target="_blank" rel="noopener">
+                <Button variant="ghost" size="sm"><FileDown className="h-3.5 w-3.5 mr-1" />Concepts PPTX</Button>
+              </a>
+              <a href={api.exportDeliverablesPdf(projectId)} target="_blank" rel="noopener">
+                <Button variant="ghost" size="sm"><FileDown className="h-3.5 w-3.5 mr-1" />All Deliverables</Button>
+              </a>
+            </div>
           )}
         </div>
       </div>

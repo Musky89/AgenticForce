@@ -3,7 +3,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.api import clients, projects, briefs, agents, deliverables, dashboard, images, brand_bible, blueprints, lora
+from app.api import (
+    clients, projects, briefs, agents, deliverables, dashboard,
+    images, brand_bible, blueprints, lora, orchestrator, review, export,
+)
 
 
 @asynccontextmanager
@@ -37,6 +40,9 @@ app.include_router(briefs.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(deliverables.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
+app.include_router(orchestrator.router, prefix="/api")
+app.include_router(review.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
 
 
 @app.get("/api/health")

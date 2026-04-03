@@ -215,3 +215,43 @@ export interface PipelineRunResult {
   project_id: string;
   runs: AgentRun[];
 }
+
+export interface OrchestratorTask {
+  id: string;
+  project_id: string;
+  agent_role: string;
+  pipeline_stage: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  sort_order: number;
+  depends_on: string[] | null;
+  requires_review: boolean;
+  agent_run_id: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface ReviewItem {
+  id: string;
+  project_id: string;
+  task_id: string | null;
+  deliverable_id: string | null;
+  image_id: string | null;
+  title: string;
+  item_type: string;
+  status: string;
+  quality_score: number | null;
+  feedback: string | null;
+  priority: number;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface ReviewQueueStats {
+  pending: number;
+  approved: number;
+  revision_requested: number;
+  total: number;
+}

@@ -127,4 +127,35 @@ export const api = {
   deleteImage: (id: string) =>
     request<void>(`/images/${id}`, { method: "DELETE" }),
   getImageUrl: (id: string) => `${API_BASE}/images/${id}/file`,
+
+  // Orchestrator
+  decomposeBrief: (projectId: string) =>
+    request<{ project_id: string; tasks: import("./types").OrchestratorTask[] }>(`/orchestrator/decompose/${projectId}`, { method: "POST" }),
+  getTaskGraph: (projectId: string) =>
+    request<import("./types").OrchestratorTask[]>(`/orchestrator/tasks/${projectId}`),
+  executeNextTask: (projectId: string) =>
+    request<import("./types").OrchestratorTask | null>(`/orchestrator/execute/${projectId}`, { method: "POST" }),
+  executeAllReady: (projectId: string) =>
+    request<import("./types").OrchestratorTask[]>(`/orchestrator/execute-all/${projectId}`, { method: "POST" }),
+  approveTask: (taskId: string, feedback?: string) =>
+    request<import("./types").OrchestratorTask>(`/orchestrator/approve/${taskId}`, { method: "POST", body: JSON.stringify({ feedback }) }),
+  requestRevision: (taskId: string, feedback: string) =>
+    request<import("./types").OrchestratorTask>(`/orchestrator/revise/${taskId}`, { method: "POST", body: JSON.stringify({ feedback }) }),
+
+  // Review Queue
+  getReviewQueue: (status?: string, projectId?: string) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (projectId) params.set("project_id", projectId);
+    const qs = params.toString();
+    return request<import("./types").ReviewItem[]>(`/review/queue${qs ? `?${qs}` : ""}`);
+  },
+  getReviewStats: () => request<import("./types").ReviewQueueStats>("/review/stats"),
+  reviewAction: (itemId: string, status: string, feedback?: string) =>
+    request<import("./types").ReviewItem>(`/review/${itemId}/action`, { method: "POST", body: JSON.stringify({ status, feedback }) }),
+
+  // Export
+  exportStrategyPdf: (projectId: string) => `${API_BASE}/export/strategy/${projectId}`,
+  exportConceptsPptx: (projectId: string) => `${API_BASE}/export/concepts/${projectId}`,
+  exportDeliverablesPdf: (projectId: string) => `${API_BASE}/export/deliverables/${projectId}`,
 };

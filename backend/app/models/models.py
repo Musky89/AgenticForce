@@ -289,6 +289,73 @@ class Deliverable(Base):
     agent_run: Mapped["AgentRun | None"] = relationship()
 
 
+class TaskStatus(str, enum.Enum):
+    PENDING = "pending"
+    BLOCKED = "blocked"
+    READY = "ready"
+    IN_PROGRESS = "in_progress"
+    AWAITING_REVIEW = "awaiting_review"
+    APPROVED = "approved"
+    REVISION_REQUESTED = "revision_requested"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ReviewStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REVISION_REQUESTED = "revision_requested"
+    REJECTED = "rejected"
+
+
+class Task(Base):
+    """Orchestrated unit of work — decomposes briefs into agent tasks with dependencies."""
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    agent_role: Mapped[AgentRole] = mapped_column(SAEnum(AgentRole), nullable=False)
+    pipeline_stage: Mapped[PipelineStage | None] = mapped_column(SAEnum(PipelineStage))
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus), default=TaskStatus.PENDING)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    depends_on: Mapped[dict | None] = mapped_column(JSON)  # [task_id, ...]
+    input_context: Mapped[dict | None] = mapped_column(JSON)
+    agent_run_id: Mapped[str | None] = mapped_column(ForeignKey("agent_runs.id"))
+    requires_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    project: Mapped["Project"] = relationship()
+    agent_run: Mapped["AgentRun | None"] = relationship()
+
+
+class ReviewItem(Base):
+    """The founder's review queue — quality-gated items requiring human judgment."""
+    __tablename__ = "review_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("tasks.id"))
+    deliverable_id: Mapped[str | None] = mapped_column(ForeignKey("deliverables.id"))
+    image_id: Mapped[str | None] = mapped_column(ForeignKey("generated_images.id"))
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    item_type: Mapped[str] = mapped_column(String(50), nullable=False)  # strategy, concept, art_direction, copy, visual, final
+    status: Mapped[ReviewStatus] = mapped_column(SAEnum(ReviewStatus), default=ReviewStatus.PENDING)
+    quality_score: Mapped[float | None] = mapped_column(Float)
+    feedback: Mapped[str | None] = mapped_column(Text)
+    priority: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    project: Mapped["Project"] = relationship()
+    task: Mapped["Task | None"] = relationship()
+    deliverable: Mapped["Deliverable | None"] = relationship()
+    image: Mapped["GeneratedImage | None"] = relationship()
+
+
 class CreativeMemory(Base):
     """Performance-linked creative memory — compounds over time."""
     __tablename__ = "creative_memory"

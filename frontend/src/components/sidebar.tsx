@@ -7,11 +7,13 @@ import {
   Users,
   FolderKanban,
   Sparkles,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/review", label: "Review Queue", icon: Inbox },
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/projects", label: "Projects", icon: FolderKanban },
 ];
