@@ -8,6 +8,8 @@ import {
   Package,
   Activity,
   CheckCircle2,
+  ImageIcon,
+  Layers,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,6 +50,8 @@ export default function DashboardPage() {
     { label: "Delivered", value: stats?.projects_delivered, icon: CheckCircle2, color: "text-emerald-400" },
     { label: "Agent Runs", value: stats?.total_agent_runs, icon: Sparkles, color: "text-pink-400" },
     { label: "Deliverables", value: stats?.total_deliverables, icon: Package, color: "text-cyan-400" },
+    { label: "Images", value: stats?.total_images, icon: ImageIcon, color: "text-rose-400" },
+    { label: "LoRA Models", value: stats?.total_lora_models, icon: Layers, color: "text-indigo-400" },
   ];
 
   return (

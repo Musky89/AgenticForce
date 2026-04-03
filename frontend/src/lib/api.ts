@@ -4,11 +4,15 @@ import type {
   ProjectDetail,
   Brief,
   AgentRun,
+  AgentRole,
   Deliverable,
   DashboardStats,
-  AgentRole,
   PipelineRunResult,
   GeneratedImage,
+  BrandBible,
+  ServiceBlueprint,
+  BlueprintTemplate,
+  LoRAModel,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
@@ -40,6 +44,32 @@ export const api = {
   deleteClient: (id: string) =>
     request<void>(`/clients/${id}`, { method: "DELETE" }),
 
+  // Brand Bible
+  getBrandBible: (clientId: string) =>
+    request<BrandBible>(`/brand-bibles/client/${clientId}`),
+  createBrandBible: (data: Partial<BrandBible> & { client_id: string }) =>
+    request<BrandBible>("/brand-bibles", { method: "POST", body: JSON.stringify(data) }),
+  updateBrandBible: (id: string, data: Partial<BrandBible>) =>
+    request<BrandBible>(`/brand-bibles/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  // Service Blueprints
+  getBlueprintTemplates: () =>
+    request<{ value: string; label: string; defaults: Record<string, unknown> }[]>("/blueprints/templates"),
+  getBlueprint: (clientId: string) =>
+    request<ServiceBlueprint>(`/blueprints/client/${clientId}`),
+  createBlueprint: (data: { client_id: string; template_type: BlueprintTemplate }) =>
+    request<ServiceBlueprint>("/blueprints", { method: "POST", body: JSON.stringify(data) }),
+  updateBlueprint: (id: string, data: Partial<ServiceBlueprint>) =>
+    request<ServiceBlueprint>(`/blueprints/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  // LoRA
+  listClientLoras: (clientId: string) =>
+    request<LoRAModel[]>(`/lora/client/${clientId}`),
+  createLora: (data: { client_id: string; name: string; trigger_word?: string }) =>
+    request<LoRAModel>("/lora", { method: "POST", body: JSON.stringify(data) }),
+  updateLora: (id: string, data: Record<string, unknown>) =>
+    request<LoRAModel>(`/lora/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
   // Projects
   listProjects: (clientId?: string) =>
     request<Project[]>(`/projects${clientId ? `?client_id=${clientId}` : ""}`),
@@ -61,10 +91,13 @@ export const api = {
 
   // Agents
   getRoles: () => request<{ value: string; label: string }[]>("/agents/roles"),
+  getPipelineStages: () => request<{ value: string; label: string }[]>("/agents/pipeline-stages"),
   runAgent: (data: { project_id: string; agent_role: AgentRole; input_data?: Record<string, unknown> }) =>
     request<AgentRun>("/agents/run", { method: "POST", body: JSON.stringify(data) }),
-  runPipeline: (data: { project_id: string; agents?: AgentRole[]; generate_images?: boolean }) =>
+  runCreativePipeline: (data: { project_id: string; generate_images?: boolean; run_quality_scoring?: boolean }) =>
     request<PipelineRunResult>("/agents/pipeline", { method: "POST", body: JSON.stringify(data) }),
+  runAgentList: (data: { project_id: string; agents?: AgentRole[]; generate_images?: boolean }) =>
+    request<PipelineRunResult>("/agents/agent-list", { method: "POST", body: JSON.stringify(data) }),
   listRuns: (projectId?: string) =>
     request<AgentRun[]>(`/agents/runs${projectId ? `?project_id=${projectId}` : ""}`),
   getRun: (id: string) => request<AgentRun>(`/agents/runs/${id}`),
@@ -81,10 +114,14 @@ export const api = {
   // Images
   listImages: (projectId?: string) =>
     request<GeneratedImage[]>(`/images${projectId ? `?project_id=${projectId}` : ""}`),
-  generateImage: (data: { prompt: string; project_id?: string; size?: string; quality?: string; style?: string }) =>
+  generateImage: (data: { prompt: string; project_id?: string; width?: number; height?: number; num_images?: number; use_client_lora?: boolean }) =>
     request<GeneratedImage[]>("/images/generate", { method: "POST", body: JSON.stringify(data) }),
   generateFromArtDirection: (projectId: string) =>
     request<GeneratedImage[]>("/images/from-art-direction", { method: "POST", body: JSON.stringify({ project_id: projectId }) }),
+  scoreImage: (imageId: string) =>
+    request<GeneratedImage>(`/images/${imageId}/score`, { method: "POST" }),
+  approveImage: (imageId: string) =>
+    request<GeneratedImage>(`/images/${imageId}/approve`, { method: "PATCH" }),
   deleteImage: (id: string) =>
     request<void>(`/images/${id}`, { method: "DELETE" }),
   getImageUrl: (id: string) => `${API_BASE}/images/${id}/file`,

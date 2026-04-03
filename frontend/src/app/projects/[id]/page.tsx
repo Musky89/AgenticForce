@@ -41,22 +41,31 @@ import type {
   GeneratedImage,
 } from "@/lib/types";
 
-const AGENT_LABELS: Record<AgentRole, string> = {
+const AGENT_LABELS: Record<string, string> = {
   researcher: "Researcher",
   strategist: "Strategist",
   brand_voice: "Brand Voice",
   copywriter: "Copywriter",
   art_director: "Art Director",
   creative_director: "Creative Director",
+  designer: "Designer",
+  quality_scorer: "Quality Scorer",
+  community_manager: "Community Manager",
+  media_buyer: "Media Buyer",
+  email_specialist: "Email Specialist",
+  seo_specialist: "SEO Specialist",
+  producer: "Producer",
 };
 
-const AGENT_COLORS: Record<AgentRole, string> = {
+const AGENT_COLORS: Record<string, string> = {
   researcher: "text-cyan-400",
   strategist: "text-blue-400",
   brand_voice: "text-violet-400",
   copywriter: "text-amber-400",
   art_director: "text-pink-400",
   creative_director: "text-emerald-400",
+  designer: "text-rose-400",
+  quality_scorer: "text-orange-400",
 };
 
 const STATUS_ICON = {
@@ -70,9 +79,10 @@ const PIPELINE_ORDER: AgentRole[] = [
   "researcher",
   "strategist",
   "brand_voice",
-  "copywriter",
-  "art_director",
   "creative_director",
+  "art_director",
+  "designer",
+  "copywriter",
 ];
 
 export default function ProjectDetailPage() {
@@ -123,9 +133,10 @@ export default function ProjectDetailPage() {
         setPipelineProgress((p) => Math.min(p + 2, 95));
       }, 1000);
 
-      const result = await api.runPipeline({
+      const result = await api.runCreativePipeline({
         project_id: projectId,
         generate_images: generateImagesWithPipeline,
+        run_quality_scoring: generateImagesWithPipeline,
       });
       clearInterval(interval);
       setPipelineProgress(100);
@@ -370,6 +381,9 @@ function BriefTab({
     inspiration: brief?.inspiration || "",
     budget_notes: brief?.budget_notes || "",
     additional_context: brief?.additional_context || "",
+    desired_emotional_response: brief?.desired_emotional_response || "",
+    mandatory_inclusions: brief?.mandatory_inclusions || "",
+    competitive_differentiation: brief?.competitive_differentiation || "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -400,6 +414,9 @@ function BriefTab({
     { key: "deliverables_description", label: "Deliverables", rows: 2, placeholder: "What do you need produced?" },
     { key: "target_audience", label: "Target Audience", rows: 2, placeholder: "Who are we speaking to?" },
     { key: "key_messages", label: "Key Messages", rows: 2, placeholder: "What must be communicated?" },
+    { key: "desired_emotional_response", label: "Desired Emotional Response", rows: 1, placeholder: "How should people feel?" },
+    { key: "mandatory_inclusions", label: "Mandatory Inclusions", rows: 2, placeholder: "What must appear in every execution?" },
+    { key: "competitive_differentiation", label: "Competitive Differentiation", rows: 2, placeholder: "Why this brand, not the competition?" },
     { key: "tone", label: "Tone & Manner", rows: 1, placeholder: "Bold, professional, playful..." },
     { key: "constraints", label: "Constraints", rows: 2, placeholder: "Budget limits, brand rules, legal requirements..." },
     { key: "inspiration", label: "Inspiration / References", rows: 2, placeholder: "Links, campaigns, styles you admire..." },
@@ -643,8 +660,6 @@ function ImagesTab({
   const [generatingFromArt, setGeneratingFromArt] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [selectedSize, setSelectedSize] = useState("1024x1024");
-  const [selectedStyle, setSelectedStyle] = useState("vivid");
-  const [selectedQuality, setSelectedQuality] = useState("standard");
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const handleGenerateCustom = async () => {
@@ -654,12 +669,13 @@ function ImagesTab({
     }
     setGenerating(true);
     try {
+      const [w, h] = selectedSize.split("x").map(Number);
       await api.generateImage({
         prompt: customPrompt,
         project_id: projectId,
-        size: selectedSize,
-        style: selectedStyle,
-        quality: selectedQuality,
+        width: w || 1024,
+        height: h || 1024,
+        use_client_lora: true,
       });
       toast.success("Image generated!");
       setCustomPrompt("");
@@ -749,41 +765,18 @@ function ImagesTab({
               onChange={(e) => setCustomPrompt(e.target.value)}
               rows={3}
             />
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <Label className="text-xs">Size</Label>
-                <select
-                  value={selectedSize}
-                  onChange={(e) => setSelectedSize(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-                >
-                  <option value="1024x1024">Square (1024x1024)</option>
-                  <option value="1792x1024">Landscape (1792x1024)</option>
-                  <option value="1024x1792">Portrait (1024x1792)</option>
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">Style</Label>
-                <select
-                  value={selectedStyle}
-                  onChange={(e) => setSelectedStyle(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-                >
-                  <option value="vivid">Vivid</option>
-                  <option value="natural">Natural</option>
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">Quality</Label>
-                <select
-                  value={selectedQuality}
-                  onChange={(e) => setSelectedQuality(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-                >
-                  <option value="standard">Standard</option>
-                  <option value="hd">HD</option>
-                </select>
-              </div>
+            <div>
+              <Label className="text-xs">Size</Label>
+              <select
+                value={selectedSize}
+                onChange={(e) => setSelectedSize(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+              >
+                <option value="1024x1024">Square (1024x1024)</option>
+                <option value="1792x1024">Landscape (1792x1024)</option>
+                <option value="1024x1792">Portrait (1024x1792)</option>
+                <option value="1344x768">Wide (1344x768)</option>
+              </select>
             </div>
             <Button
               onClick={handleGenerateCustom}
@@ -837,12 +830,21 @@ function ImagesTab({
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {img.quality_score !== null && (
+                      <Badge className={img.quality_score >= 7 ? "bg-emerald-500/90" : img.quality_score >= 5 ? "bg-amber-500/90" : "bg-red-500/90"}>
+                        {img.quality_score}/10
+                      </Badge>
+                    )}
+                    {img.is_approved && <Badge className="bg-emerald-500/90">Approved</Badge>}
+                    {img.is_rejected && <Badge className="bg-red-500/90">Rejected</Badge>}
+                  </div>
                   <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
                     <p className="text-white text-sm font-medium truncate">
                       {img.label || "Generated Image"}
                     </p>
                     <p className="text-white/70 text-xs">
-                      {img.size} &middot; {img.style} &middot; {img.quality}
+                      {img.size}{img.quality_score !== null ? ` · Score: ${img.quality_score}/10` : ""}
                     </p>
                   </div>
                 </div>
@@ -863,28 +865,33 @@ function ImagesTab({
                         </p>
                       </div>
                     )}
+                    {img.quality_breakdown && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Quality Breakdown</p>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(img.quality_breakdown.dimensions as Record<string, {score: number}> || {}).map(([k, v]) => (
+                            <Badge key={k} variant="outline" className="text-xs">
+                              {k.replace("_", " ")}: {v.score}/10
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="flex gap-2">
-                      <a
-                        href={api.getImageUrl(img.id)}
-                        download={img.filename}
-                        target="_blank"
-                        rel="noopener"
-                        className="flex-1"
-                      >
-                        <Button variant="outline" size="sm" className="w-full">
-                          <Download className="h-3.5 w-3.5 mr-1" />
-                          Download
+                      {!img.is_approved && (
+                        <Button variant="outline" size="sm" className="text-emerald-400" onClick={(e) => { e.stopPropagation(); api.approveImage(img.id).then(() => { toast.success("Approved"); onRefresh(); }); }}>
+                          <ThumbsUp className="h-3.5 w-3.5 mr-1" />Approve
                         </Button>
+                      )}
+                      {img.quality_score === null && (
+                        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); api.scoreImage(img.id).then(() => { toast.success("Scored"); onRefresh(); }); }}>
+                          Score
+                        </Button>
+                      )}
+                      <a href={api.getImageUrl(img.id)} download={img.filename} target="_blank" rel="noopener" className="flex-1">
+                        <Button variant="outline" size="sm" className="w-full"><Download className="h-3.5 w-3.5 mr-1" />Download</Button>
                       </a>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(img.id);
-                        }}
-                      >
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(img.id); }}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
