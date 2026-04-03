@@ -82,6 +82,16 @@ class Client(Base):
     lora_models: Mapped[list["LoRAModel"]] = relationship(back_populates="client", cascade="all, delete-orphan")
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class BrandBible(Base):
     """Structured brand context that feeds every agent — the brand's DNA encoded as data."""
     __tablename__ = "brand_bibles"
@@ -354,6 +364,21 @@ class ReviewItem(Base):
     task: Mapped["Task | None"] = relationship()
     deliverable: Mapped["Deliverable | None"] = relationship()
     image: Mapped["GeneratedImage | None"] = relationship()
+
+
+class MessageLog(Base):
+    """Persisted inter-agent messages for audit and replay."""
+    __tablename__ = "message_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    message_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    from_agent: Mapped[str] = mapped_column(String(50), nullable=False)
+    to_agent: Mapped[str | None] = mapped_column(String(50))
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    project: Mapped["Project"] = relationship()
 
 
 class CreativeMemory(Base):
