@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.api import clients, projects, briefs, agents, deliverables, dashboard
+from app.api import clients, projects, briefs, agents, deliverables, dashboard, images
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ app.include_router(projects.router, prefix="/api")
 app.include_router(briefs.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(deliverables.router, prefix="/api")
+app.include_router(images.router, prefix="/api")
 
 
 @app.get("/api/health")

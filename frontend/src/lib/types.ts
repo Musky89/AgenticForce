@@ -101,3 +101,17 @@ export interface PipelineRunResult {
   project_id: string;
   runs: AgentRun[];
 }
+
+export interface GeneratedImage {
+  id: string;
+  project_id: string | null;
+  agent_run_id: string | null;
+  filename: string;
+  prompt: string;
+  revised_prompt: string | null;
+  label: string | null;
+  size: string;
+  quality: string;
+  style: string;
+  created_at: string;
+}

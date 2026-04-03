@@ -14,6 +14,10 @@ import {
   ThumbsUp,
   Send,
   Trash2,
+  ImageIcon,
+  Download,
+  Sparkles,
+  Wand2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,8 +38,8 @@ import type {
   AgentRun,
   AgentRole,
   Deliverable,
+  GeneratedImage,
 } from "@/lib/types";
-import Link from "next/link";
 
 const AGENT_LABELS: Record<AgentRole, string> = {
   researcher: "Researcher",
@@ -79,22 +83,26 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
+  const [images, setImages] = useState<GeneratedImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [pipelineRunning, setPipelineRunning] = useState(false);
   const [singleAgentRunning, setSingleAgentRunning] = useState<AgentRole | null>(null);
   const [pipelineProgress, setPipelineProgress] = useState(0);
   const [activeTab, setActiveTab] = useState("brief");
+  const [generateImagesWithPipeline, setGenerateImagesWithPipeline] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [p, r, d] = await Promise.all([
+      const [p, r, d, imgs] = await Promise.all([
         api.getProject(projectId),
         api.listRuns(projectId),
         api.listDeliverables(projectId),
+        api.listImages(projectId),
       ]);
       setProject(p);
       setRuns(r);
       setDeliverables(d);
+      setImages(imgs);
     } catch {
       toast.error("Failed to load project");
     } finally {
@@ -115,15 +123,16 @@ export default function ProjectDetailPage() {
         setPipelineProgress((p) => Math.min(p + 2, 95));
       }, 1000);
 
-      const result = await api.runPipeline({ project_id: projectId });
+      const result = await api.runPipeline({
+        project_id: projectId,
+        generate_images: generateImagesWithPipeline,
+      });
       clearInterval(interval);
       setPipelineProgress(100);
 
       const failed = result.runs.filter((r) => r.status === "failed");
       if (failed.length > 0) {
-        toast.warning(
-          `Pipeline completed with ${failed.length} failure(s)`
-        );
+        toast.warning(`Pipeline completed with ${failed.length} failure(s)`);
       } else {
         toast.success("Pipeline completed successfully!");
       }
@@ -199,6 +208,7 @@ export default function ProjectDetailPage() {
 
   const hasBrief = !!project.brief;
   const completedRuns = runs.filter((r) => r.status === "completed");
+  const hasArtDirectorRun = completedRuns.some((r) => r.agent_role === "art_director");
 
   return (
     <div className="space-y-6">
@@ -213,9 +223,19 @@ export default function ProjectDetailPage() {
             {new Date(project.created_at).toLocaleDateString()}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {hasBrief && (
             <>
+              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={generateImagesWithPipeline}
+                  onChange={(e) => setGenerateImagesWithPipeline(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <ImageIcon className="h-3.5 w-3.5" />
+                Generate images
+              </label>
               <Button
                 variant="outline"
                 disabled={pipelineRunning || !hasBrief}
@@ -234,10 +254,7 @@ export default function ProjectDetailPage() {
                 )}
                 Run Next Agent
               </Button>
-              <Button
-                disabled={pipelineRunning}
-                onClick={runPipeline}
-              >
+              <Button disabled={pipelineRunning} onClick={runPipeline}>
                 {pipelineRunning ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
@@ -253,7 +270,10 @@ export default function ProjectDetailPage() {
       {pipelineRunning && (
         <div className="space-y-2">
           <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Pipeline executing...</span>
+            <span>
+              Pipeline executing
+              {generateImagesWithPipeline ? " (with image generation)" : ""}...
+            </span>
             <span>{Math.round(pipelineProgress)}%</span>
           </div>
           <Progress value={pipelineProgress} className="h-2" />
@@ -261,7 +281,7 @@ export default function ProjectDetailPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="brief">Brief</TabsTrigger>
           <TabsTrigger value="agents">
             Agents
@@ -279,15 +299,19 @@ export default function ProjectDetailPage() {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="images">
+            Images
+            {images.length > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
+                {images.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="agents-panel">Run Agents</TabsTrigger>
         </TabsList>
 
         <TabsContent value="brief" className="mt-6">
-          <BriefTab
-            projectId={projectId}
-            brief={project.brief}
-            onSaved={load}
-          />
+          <BriefTab projectId={projectId} brief={project.brief} onSaved={load} />
         </TabsContent>
 
         <TabsContent value="agents" className="mt-6">
@@ -300,6 +324,15 @@ export default function ProjectDetailPage() {
             onApprove={approveDeliverable}
             onFeedback={submitFeedback}
             onDelete={deleteDeliverable}
+          />
+        </TabsContent>
+
+        <TabsContent value="images" className="mt-6">
+          <ImagesTab
+            projectId={projectId}
+            images={images}
+            hasArtDirectorRun={hasArtDirectorRun}
+            onRefresh={load}
           />
         </TabsContent>
 
@@ -389,17 +422,13 @@ function BriefTab({
             {field.rows === 1 ? (
               <Input
                 value={form[field.key] || ""}
-                onChange={(e) =>
-                  setForm({ ...form, [field.key]: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
                 placeholder={field.placeholder}
               />
             ) : (
               <Textarea
                 value={form[field.key] || ""}
-                onChange={(e) =>
-                  setForm({ ...form, [field.key]: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
                 placeholder={field.placeholder}
                 rows={field.rows}
               />
@@ -407,9 +436,7 @@ function BriefTab({
           </div>
         ))}
         <Button onClick={handleSave} disabled={saving} className="w-full">
-          {saving ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : null}
+          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
           {brief ? "Update Brief" : "Create Brief"}
         </Button>
       </CardContent>
@@ -444,17 +471,13 @@ function AgentRunsTab({ runs }: { runs: AgentRun[] }) {
               <div className="flex items-center justify-between">
                 <CardTitle className={`text-base flex items-center gap-2 ${color}`}>
                   <Icon
-                    className={`h-4 w-4 ${
-                      run.status === "running" ? "animate-spin" : ""
-                    }`}
+                    className={`h-4 w-4 ${run.status === "running" ? "animate-spin" : ""}`}
                   />
                   {AGENT_LABELS[run.agent_role]}
                 </CardTitle>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   {run.tokens_used && <span>{run.tokens_used} tokens</span>}
-                  {run.duration_seconds && (
-                    <span>{run.duration_seconds}s</span>
-                  )}
+                  {run.duration_seconds && <span>{run.duration_seconds}s</span>}
                   <Badge
                     variant="secondary"
                     className={
@@ -528,9 +551,7 @@ function DeliverablesTab({
               <CardTitle className="text-base flex items-center gap-2">
                 {d.title}
                 {d.is_approved && (
-                  <Badge className="bg-emerald-500/20 text-emerald-400">
-                    Approved
-                  </Badge>
+                  <Badge className="bg-emerald-500/20 text-emerald-400">Approved</Badge>
                 )}
               </CardTitle>
               <div className="flex gap-1">
@@ -562,9 +583,7 @@ function DeliverablesTab({
                 {d.content}
               </div>
             </ScrollArea>
-
             <Separator />
-
             <div className="space-y-2">
               {d.feedback && (
                 <div className="p-3 rounded-lg bg-accent text-sm">
@@ -577,10 +596,7 @@ function DeliverablesTab({
                   placeholder="Add feedback..."
                   value={feedbackInputs[d.id] || ""}
                   onChange={(e) =>
-                    setFeedbackInputs({
-                      ...feedbackInputs,
-                      [d.id]: e.target.value,
-                    })
+                    setFeedbackInputs({ ...feedbackInputs, [d.id]: e.target.value })
                   }
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && feedbackInputs[d.id]) {
@@ -606,6 +622,279 @@ function DeliverablesTab({
           </CardContent>
         </Card>
       ))}
+    </div>
+  );
+}
+
+// ---- Images Tab ----
+
+function ImagesTab({
+  projectId,
+  images,
+  hasArtDirectorRun,
+  onRefresh,
+}: {
+  projectId: string;
+  images: GeneratedImage[];
+  hasArtDirectorRun: boolean;
+  onRefresh: () => void;
+}) {
+  const [generating, setGenerating] = useState(false);
+  const [generatingFromArt, setGeneratingFromArt] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [selectedSize, setSelectedSize] = useState("1024x1024");
+  const [selectedStyle, setSelectedStyle] = useState("vivid");
+  const [selectedQuality, setSelectedQuality] = useState("standard");
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
+
+  const handleGenerateCustom = async () => {
+    if (!customPrompt.trim()) {
+      toast.error("Enter an image prompt");
+      return;
+    }
+    setGenerating(true);
+    try {
+      await api.generateImage({
+        prompt: customPrompt,
+        project_id: projectId,
+        size: selectedSize,
+        style: selectedStyle,
+        quality: selectedQuality,
+      });
+      toast.success("Image generated!");
+      setCustomPrompt("");
+      onRefresh();
+    } catch {
+      toast.error("Image generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleGenerateFromArt = async () => {
+    setGeneratingFromArt(true);
+    try {
+      const result = await api.generateFromArtDirection(projectId);
+      toast.success(`Generated ${result.length} image(s) from art direction`);
+      onRefresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to generate from art direction");
+    } finally {
+      setGeneratingFromArt(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteImage(id);
+      toast.success("Image deleted");
+      onRefresh();
+    } catch {
+      toast.error("Failed to delete image");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Generation Controls */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* From Art Direction */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wand2 className="h-4 w-4 text-pink-400" />
+              Generate from Art Direction
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {hasArtDirectorRun ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Auto-extract visual concepts from the Art Director&apos;s output and generate
+                  2-4 images using DALL-E 3.
+                </p>
+                <Button
+                  onClick={handleGenerateFromArt}
+                  disabled={generatingFromArt}
+                  className="w-full"
+                >
+                  {generatingFromArt ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  {generatingFromArt ? "Generating images..." : "Generate from Art Direction"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Run the Art Director agent first to enable this feature.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Custom Prompt */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ImageIcon className="h-4 w-4 text-cyan-400" />
+              Custom Image Generation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              placeholder="Describe the image you want to generate..."
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              rows={3}
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Size</Label>
+                <select
+                  value={selectedSize}
+                  onChange={(e) => setSelectedSize(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                >
+                  <option value="1024x1024">Square (1024x1024)</option>
+                  <option value="1792x1024">Landscape (1792x1024)</option>
+                  <option value="1024x1792">Portrait (1024x1792)</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Style</Label>
+                <select
+                  value={selectedStyle}
+                  onChange={(e) => setSelectedStyle(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                >
+                  <option value="vivid">Vivid</option>
+                  <option value="natural">Natural</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Quality</Label>
+                <select
+                  value={selectedQuality}
+                  onChange={(e) => setSelectedQuality(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                >
+                  <option value="standard">Standard</option>
+                  <option value="hd">HD</option>
+                </select>
+              </div>
+            </div>
+            <Button
+              onClick={handleGenerateCustom}
+              disabled={generating}
+              className="w-full"
+              variant="outline"
+            >
+              {generating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ImageIcon className="h-4 w-4 mr-2" />
+              )}
+              {generating ? "Generating..." : "Generate Image"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Image Gallery */}
+      {images.length === 0 ? (
+        <Card className="bg-card border-border">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <ImageIcon className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">
+              No images generated yet. Use the controls above or check &quot;Generate images&quot;
+              when running the pipeline.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">
+            Generated Images ({images.length})
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {images.map((img) => (
+              <Card
+                key={img.id}
+                className="bg-card border-border overflow-hidden group"
+              >
+                <div
+                  className="relative aspect-square cursor-pointer"
+                  onClick={() =>
+                    setExpandedImage(expandedImage === img.id ? null : img.id)
+                  }
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={api.getImageUrl(img.id)}
+                    alt={img.label || img.prompt}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-white text-sm font-medium truncate">
+                      {img.label || "Generated Image"}
+                    </p>
+                    <p className="text-white/70 text-xs">
+                      {img.size} &middot; {img.style} &middot; {img.quality}
+                    </p>
+                  </div>
+                </div>
+
+                {expandedImage === img.id && (
+                  <CardContent className="space-y-3 pt-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Prompt</p>
+                      <p className="text-sm">{img.prompt}</p>
+                    </div>
+                    {img.revised_prompt && img.revised_prompt !== img.prompt && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">
+                          DALL-E Revised Prompt
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {img.revised_prompt}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <a
+                        href={api.getImageUrl(img.id)}
+                        download={img.filename}
+                        target="_blank"
+                        rel="noopener"
+                        className="flex-1"
+                      >
+                        <Button variant="outline" size="sm" className="w-full">
+                          <Download className="h-3.5 w-3.5 mr-1" />
+                          Download
+                        </Button>
+                      </a>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(img.id);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -636,9 +925,7 @@ function AgentsPanelTab({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {PIPELINE_ORDER.map((role) => {
-              const hasCompleted = completedRuns.some(
-                (r) => r.agent_role === role
-              );
+              const hasCompleted = completedRuns.some((r) => r.agent_role === role);
               const isRunning = singleAgentRunning === role;
               return (
                 <button
@@ -659,9 +946,7 @@ function AgentsPanelTab({
                     )}
                   </div>
                   <div>
-                    <p className="font-medium text-sm">
-                      {AGENT_LABELS[role]}
-                    </p>
+                    <p className="font-medium text-sm">{AGENT_LABELS[role]}</p>
                     <p className="text-xs text-muted-foreground">
                       {hasCompleted ? "Completed" : "Ready"}
                     </p>

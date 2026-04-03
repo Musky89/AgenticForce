@@ -28,7 +28,7 @@ async def execute_agent(payload: AgentRunRequest, db: AsyncSession = Depends(get
 
 @router.post("/pipeline", response_model=PipelineRunOut)
 async def execute_pipeline(payload: PipelineRunRequest, db: AsyncSession = Depends(get_db)):
-    runs = await run_pipeline(db, payload.project_id, payload.agents)
+    runs = await run_pipeline(db, payload.project_id, payload.agents, payload.generate_images)
     return PipelineRunOut(
         project_id=payload.project_id,
         runs=[AgentRunOut.model_validate(r) for r in runs],

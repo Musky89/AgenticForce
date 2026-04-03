@@ -5,10 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.models import (
-    AgentRole, AgentRun, Brief, Client, Deliverable, Project,
+    AgentRole, AgentRun, Brief, Client, Deliverable, GeneratedImage, Project,
     ProjectStatus, RunStatus,
 )
 from app.agents.registry import get_agent
+from app.services.image_gen import generate_images_from_art_direction
 
 logger = logging.getLogger(__name__)
 
@@ -117,10 +118,41 @@ async def run_single_agent(
     return agent_run
 
 
+async def generate_images_for_project(
+    db: AsyncSession,
+    project_id: str,
+    agent_run_id: str,
+    art_direction_text: str,
+) -> list[GeneratedImage]:
+    """Generate images from art direction output and save to database."""
+    results = await generate_images_from_art_direction(art_direction_text)
+    images = []
+    for r in results:
+        if "error" in r:
+            logger.warning(f"Image gen failed for '{r.get('label')}': {r['error']}")
+            continue
+        img = GeneratedImage(
+            project_id=project_id,
+            agent_run_id=agent_run_id,
+            filename=r["filename"],
+            prompt=r["prompt"],
+            revised_prompt=r.get("revised_prompt"),
+            label=r.get("label", "Art Direction Image"),
+            size=r["size"],
+            quality=r["quality"],
+            style=r["style"],
+        )
+        db.add(img)
+        images.append(img)
+    await db.flush()
+    return images
+
+
 async def run_pipeline(
     db: AsyncSession,
     project_id: str,
     agents: list[AgentRole] | None = None,
+    generate_images: bool = False,
 ) -> list[AgentRun]:
     """Run a full pipeline of agents sequentially, each building on prior outputs."""
     if agents is None:
@@ -140,6 +172,19 @@ async def run_pipeline(
         if run.status == RunStatus.FAILED:
             logger.warning(f"Pipeline stopping: {role.value} failed")
             break
+
+        if (
+            generate_images
+            and role == AgentRole.ART_DIRECTOR
+            and run.status == RunStatus.COMPLETED
+            and run.output_data
+        ):
+            try:
+                art_text = run.output_data.get("content", "")
+                await generate_images_for_project(db, project_id, run.id, art_text)
+                logger.info("Auto-generated images from art direction")
+            except Exception as e:
+                logger.error(f"Auto image generation failed: {e}")
 
     all_succeeded = all(r.status == RunStatus.COMPLETED for r in runs)
     project.status = ProjectStatus.REVIEW if all_succeeded else ProjectStatus.IN_PROGRESS

@@ -8,6 +8,7 @@ import type {
   DashboardStats,
   AgentRole,
   PipelineRunResult,
+  GeneratedImage,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
@@ -62,7 +63,7 @@ export const api = {
   getRoles: () => request<{ value: string; label: string }[]>("/agents/roles"),
   runAgent: (data: { project_id: string; agent_role: AgentRole; input_data?: Record<string, unknown> }) =>
     request<AgentRun>("/agents/run", { method: "POST", body: JSON.stringify(data) }),
-  runPipeline: (data: { project_id: string; agents?: AgentRole[] }) =>
+  runPipeline: (data: { project_id: string; agents?: AgentRole[]; generate_images?: boolean }) =>
     request<PipelineRunResult>("/agents/pipeline", { method: "POST", body: JSON.stringify(data) }),
   listRuns: (projectId?: string) =>
     request<AgentRun[]>(`/agents/runs${projectId ? `?project_id=${projectId}` : ""}`),
@@ -76,4 +77,15 @@ export const api = {
     request<Deliverable>(`/deliverables/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteDeliverable: (id: string) =>
     request<void>(`/deliverables/${id}`, { method: "DELETE" }),
+
+  // Images
+  listImages: (projectId?: string) =>
+    request<GeneratedImage[]>(`/images${projectId ? `?project_id=${projectId}` : ""}`),
+  generateImage: (data: { prompt: string; project_id?: string; size?: string; quality?: string; style?: string }) =>
+    request<GeneratedImage[]>("/images/generate", { method: "POST", body: JSON.stringify(data) }),
+  generateFromArtDirection: (projectId: string) =>
+    request<GeneratedImage[]>("/images/from-art-direction", { method: "POST", body: JSON.stringify({ project_id: projectId }) }),
+  deleteImage: (id: string) =>
+    request<void>(`/images/${id}`, { method: "DELETE" }),
+  getImageUrl: (id: string) => `${API_BASE}/images/${id}/file`,
 };

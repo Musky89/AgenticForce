@@ -151,6 +151,7 @@ class PipelineRunRequest(BaseModel):
             AgentRole.CREATIVE_DIRECTOR,
         ]
     )
+    generate_images: bool = False
 
 
 class PipelineRunOut(BaseModel):
@@ -187,6 +188,36 @@ class DeliverableOut(BaseModel):
     is_approved: bool
     feedback: str | None
     metadata_json: dict | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Generated Images ---
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str
+    project_id: str | None = None
+    size: str = "1024x1024"
+    quality: str = "standard"
+    style: str = "vivid"
+
+
+class ImageFromArtDirectionRequest(BaseModel):
+    project_id: str
+
+
+class GeneratedImageOut(BaseModel):
+    id: str
+    project_id: str | None
+    agent_run_id: str | None
+    filename: str
+    prompt: str
+    revised_prompt: str | None
+    label: str | None
+    size: str
+    quality: str
+    style: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

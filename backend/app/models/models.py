@@ -109,6 +109,25 @@ class AgentRun(Base):
     project: Mapped["Project"] = relationship(back_populates="agent_runs")
 
 
+class GeneratedImage(Base):
+    __tablename__ = "generated_images"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id"))
+    agent_run_id: Mapped[str | None] = mapped_column(ForeignKey("agent_runs.id"))
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    revised_prompt: Mapped[str | None] = mapped_column(Text)
+    label: Mapped[str | None] = mapped_column(String(255))
+    size: Mapped[str] = mapped_column(String(20), default="1024x1024")
+    quality: Mapped[str] = mapped_column(String(20), default="standard")
+    style: Mapped[str] = mapped_column(String(20), default="vivid")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    project: Mapped["Project | None"] = relationship()
+    agent_run: Mapped["AgentRun | None"] = relationship()
+
+
 class Deliverable(Base):
     __tablename__ = "deliverables"
 
