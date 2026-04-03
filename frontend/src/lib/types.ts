@@ -255,3 +255,15 @@ export interface ReviewQueueStats {
   revision_requested: number;
   total: number;
 }
+
+export interface CreativeMemoryEntry {
+  id: string;
+  client_id: string;
+  memory_type: string;
+  content: string;
+  category: string | null;
+  effectiveness_score: number | null;
+  times_used: number;
+  created_at: string;
+  updated_at: string;
+}

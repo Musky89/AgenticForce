@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Pencil, Trash2, Globe, Building2, Users, BookOpen, Settings2, Layers } from "lucide-react";
+import { Plus, Pencil, Trash2, Globe, Building2, Users, BookOpen, Settings2, Layers, Brain } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +103,9 @@ export default function ClientsPage() {
                   </Link>
                   <Link href={`/clients/${c.id}/lora`}>
                     <Badge variant="secondary" className="cursor-pointer hover:bg-accent gap-1"><Layers className="h-3 w-3" />LoRA</Badge>
+                  </Link>
+                  <Link href={`/clients/${c.id}/memory`}>
+                    <Badge variant="secondary" className="cursor-pointer hover:bg-accent gap-1"><Brain className="h-3 w-3" />Memory</Badge>
                   </Link>
                 </div>
               </CardContent>

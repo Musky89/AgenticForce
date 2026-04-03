@@ -13,13 +13,17 @@ import type {
   ServiceBlueprint,
   BlueprintTemplate,
   LoRAModel,
+  CreativeMemoryEntry,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
+    headers: { ...headers, ...options?.headers },
     ...options,
   });
   if (!res.ok) {
@@ -158,4 +162,31 @@ export const api = {
   exportStrategyPdf: (projectId: string) => `${API_BASE}/export/strategy/${projectId}`,
   exportConceptsPptx: (projectId: string) => `${API_BASE}/export/concepts/${projectId}`,
   exportDeliverablesPdf: (projectId: string) => `${API_BASE}/export/deliverables/${projectId}`,
+
+  // Auth
+  login: (email: string, password: string) =>
+    request<{ access_token: string; token_type: string }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  setup: (email: string, password: string) =>
+    request<{ access_token: string; token_type: string }>("/auth/setup", { method: "POST", body: JSON.stringify({ email, password }) }),
+  getMe: () => request<{ id: string; email: string }>("/auth/me"),
+
+  // Creative Memory
+  listMemories: (clientId: string, type?: string) => {
+    const params = new URLSearchParams();
+    if (type) params.set("type", type);
+    const qs = params.toString();
+    return request<CreativeMemoryEntry[]>(`/memory/client/${clientId}${qs ? `?${qs}` : ""}`);
+  },
+  createMemory: (data: { client_id: string; memory_type: string; content: string; category?: string; effectiveness_score?: number }) =>
+    request<CreativeMemoryEntry>("/memory", { method: "POST", body: JSON.stringify(data) }),
+  deleteMemory: (id: string) =>
+    request<void>(`/memory/${id}`, { method: "DELETE" }),
+  ingestPerformance: (data: { client_id: string; platform: string; metrics: Record<string, unknown> }) =>
+    request<{ ingested: number }>("/memory/ingest-performance", { method: "POST", body: JSON.stringify(data) }),
+  getClientInsights: (clientId: string) =>
+    request<{ insights: string[]; patterns: string[] }>(`/memory/client/${clientId}/insights`),
+
+  // LoRA Training
+  trainLora: (loraId: string, data: { images_data_url: string; trigger_word: string; steps?: number }) =>
+    request<LoRAModel>(`/lora/${loraId}/train`, { method: "POST", body: JSON.stringify(data) }),
 };

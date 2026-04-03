@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Layers, Plus, Loader2 } from "lucide-react";
+import { ArrowLeft, Layers, Plus, Loader2, Dumbbell } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,10 @@ export default function LoRAPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ name: "", trigger_word: "" });
+  const [trainDialogOpen, setTrainDialogOpen] = useState(false);
+  const [trainTarget, setTrainTarget] = useState<LoRAModel | null>(null);
+  const [trainForm, setTrainForm] = useState({ images_data_url: "", trigger_word: "", steps: "1500" });
+  const [training, setTraining] = useState(false);
 
   const load = useCallback(async () => {
     try { setModels(await api.listClientLoras(clientId)); } catch { /* none */ }
@@ -45,6 +49,34 @@ export default function LoRAPage() {
       toast.success("LoRA model registered");
       setDialogOpen(false); setForm({ name: "", trigger_word: "" }); load();
     } catch { toast.error("Failed to create"); }
+  };
+
+  const openTrainDialog = (model: LoRAModel) => {
+    setTrainTarget(model);
+    setTrainForm({ images_data_url: "", trigger_word: model.trigger_word || "", steps: "1500" });
+    setTrainDialogOpen(true);
+  };
+
+  const handleTrain = async () => {
+    if (!trainTarget) return;
+    if (!trainForm.images_data_url.trim()) { toast.error("Training images URL required"); return; }
+    if (!trainForm.trigger_word.trim()) { toast.error("Trigger word required"); return; }
+    setTraining(true);
+    try {
+      await api.trainLora(trainTarget.id, {
+        images_data_url: trainForm.images_data_url,
+        trigger_word: trainForm.trigger_word,
+        steps: parseInt(trainForm.steps) || 1500,
+      });
+      toast.success("Training started! Status will update when complete.");
+      setTrainDialogOpen(false);
+      setTrainTarget(null);
+      load();
+    } catch {
+      toast.error("Failed to start training");
+    } finally {
+      setTraining(false);
+    }
   };
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-48" /></div>;
@@ -85,16 +117,74 @@ export default function LoRAPage() {
                 <CardDescription>v{m.version} &middot; {m.base_model}{m.trigger_word && ` &middot; trigger: "${m.trigger_word}"`}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex gap-4 text-sm text-muted-foreground">
-                  {m.training_images_count && <span>{m.training_images_count} training images</span>}
-                  {m.training_steps && <span>{m.training_steps} steps</span>}
-                  {m.weights_url && <span className="text-emerald-400">Weights loaded</span>}
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex gap-4 flex-1">
+                    {m.training_images_count && <span>{m.training_images_count} training images</span>}
+                    {m.training_steps && <span>{m.training_steps} steps</span>}
+                    {m.weights_url && <span className="text-emerald-400">Weights loaded</span>}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openTrainDialog(m)}
+                    disabled={m.status === "training"}
+                  >
+                    {m.status === "training" ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <Dumbbell className="h-3.5 w-3.5 mr-1" />
+                    )}
+                    {m.status === "training" ? "Training..." : "Train"}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <Dialog open={trainDialogOpen} onOpenChange={setTrainDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Train LoRA — {trainTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Training Images URL (ZIP)</Label>
+              <Input
+                value={trainForm.images_data_url}
+                onChange={(e) => setTrainForm({ ...trainForm, images_data_url: e.target.value })}
+                placeholder="https://storage.example.com/training-images.zip"
+              />
+              <p className="text-xs text-muted-foreground mt-1">URL to a ZIP archive containing training images</p>
+            </div>
+            <div>
+              <Label>Trigger Word</Label>
+              <Input
+                value={trainForm.trigger_word}
+                onChange={(e) => setTrainForm({ ...trainForm, trigger_word: e.target.value })}
+                placeholder="brandx_style"
+              />
+            </div>
+            <div>
+              <Label>Training Steps</Label>
+              <Input
+                type="number"
+                min="100"
+                max="10000"
+                value={trainForm.steps}
+                onChange={(e) => setTrainForm({ ...trainForm, steps: e.target.value })}
+                placeholder="1500"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Recommended: 1000–2000 steps for most datasets</p>
+            </div>
+            <Button onClick={handleTrain} className="w-full" disabled={training}>
+              {training && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Start Training
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
