@@ -13,6 +13,7 @@ router = APIRouter(prefix="/export", tags=["export"])
 EXPORTS_DIR = Path(__file__).parent.parent.parent / "exports"
 
 
+@router.get("/strategy/{project_id}")
 @router.post("/strategy/{project_id}")
 async def export_strategy(project_id: str, db: AsyncSession = Depends(get_db)):
     """Export strategy deliverables as a polished PDF."""
@@ -42,6 +43,7 @@ async def export_strategy(project_id: str, db: AsyncSession = Depends(get_db)):
     return FileResponse(EXPORTS_DIR / filename, media_type="application/pdf", filename=filename)
 
 
+@router.get("/concepts/{project_id}")
 @router.post("/concepts/{project_id}")
 async def export_concepts(project_id: str, db: AsyncSession = Depends(get_db)):
     """Export creative concepts as a PPTX presentation."""
@@ -74,6 +76,7 @@ async def export_concepts(project_id: str, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.get("/deliverables/{project_id}")
 @router.post("/deliverables/{project_id}")
 async def export_all_deliverables(project_id: str, db: AsyncSession = Depends(get_db)):
     """Export all approved deliverables as a consolidated PDF."""
