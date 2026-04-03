@@ -6,7 +6,7 @@ from app.database import init_db
 from app.api import (
     clients, projects, briefs, agents, deliverables, dashboard,
     images, brand_bible, blueprints, lora, orchestrator, review, export,
-    auth, events,
+    auth, events, creative_memory,
 )
 
 
@@ -46,6 +46,7 @@ app.include_router(review.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(events.router, prefix="/api")
+app.include_router(creative_memory.router, prefix="/api")
 
 
 @app.get("/api/health")

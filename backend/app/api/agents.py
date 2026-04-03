@@ -6,13 +6,18 @@ from app.database import get_db
 from app.models.models import AgentRun, AgentRole, RunStatus, PipelineStage
 from app.schemas.schemas import AgentRunRequest, AgentRunOut, PipelineRunRequest, AgentListRunRequest, PipelineRunOut
 from app.services.pipeline import run_single_agent, run_creative_pipeline, run_agent_pipeline
+from app.agents.registry import AGENT_REGISTRY
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
 @router.get("/roles")
 async def list_roles():
-    return [{"value": r.value, "label": r.value.replace("_", " ").title()} for r in AgentRole]
+    return [
+        {"value": r.value, "label": r.value.replace("_", " ").title()}
+        for r in AgentRole
+        if r in AGENT_REGISTRY
+    ]
 
 
 @router.get("/pipeline-stages")

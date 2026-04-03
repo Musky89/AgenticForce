@@ -21,7 +21,7 @@ from app.models.models import (
 from app.agents.registry import get_agent
 from app.services.creative_memory import get_client_memory_context, auto_capture_from_approval
 from app.services.image_gen import generate_image, generate_images_from_art_direction
-from app.services.quality_scoring import score_image
+from app.services.quality_scoring import score_image, score_copy
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +315,28 @@ async def run_creative_pipeline(
         pipeline_stage=PipelineStage.REFINEMENT,
     )
     runs.append(run)
+
+    if run.status == RunStatus.COMPLETED and run.output_data:
+        copy_text = run.output_data.get("content", "")
+        if copy_text:
+            try:
+                context = await build_context(db, project_id)
+                copy_scores = await score_copy(
+                    copy_text,
+                    context.get("brand_bible", {}),
+                    context.get("brief"),
+                )
+                copy_deliverables = await db.execute(
+                    select(Deliverable).where(
+                        Deliverable.agent_run_id == run.id,
+                    )
+                )
+                for deliv in copy_deliverables.scalars():
+                    deliv.metadata_json = {**(deliv.metadata_json or {}), "copy_score": copy_scores}
+                await db.flush()
+                logger.info("Copy scored: composite=%.1f", copy_scores.get("composite_score", 0))
+            except Exception as e:
+                logger.error("Copy scoring failed: %s", e)
 
     # Stage 6: Quality Scoring
     if run_quality_scoring:
