@@ -1,131 +1,98 @@
 # AgenticForce
 
-A full-stack AI-powered creative agency platform. Six specialized AI agents work as your creative team — from research to final creative direction — producing client-ready deliverables and generated visuals you review and refine.
+An AI-powered creative agency platform that produces categorically better output than anyone using LLMs or image generators directly. The IP isn't the AI — it's the five-layer system wrapped around the AI that compounds over time.
 
-## Architecture
+## The Five Layers of Creative IP
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    Frontend                          │
-│               Next.js 16 + shadcn/ui                │
-│  Dashboard │ Clients │ Projects │ Review │ Images   │
-└──────────────────────┬──────────────────────────────┘
-                       │ REST API
-┌──────────────────────▼──────────────────────────────┐
-│                    Backend                           │
-│                FastAPI (async)                       │
-├─────────────────────────────────────────────────────┤
-│             Agent Pipeline Engine                    │
-│  Researcher → Strategist → Brand Voice →            │
-│  Copywriter → Art Director → Creative Dir           │
-├─────────────────────────────────────────────────────┤
-│  Image Generation (DALL-E 3 via OpenAI)             │
-│  Auto-extract prompts from Art Director output      │
-│  Custom prompt generation │ Gallery │ Download      │
-├─────────────────────────────────────────────────────┤
-│            SQLite + SQLAlchemy (async)               │
-└─────────────────────────────────────────────────────┘
-```
+### Layer 1: Brand-Specific LoRA Models
+Per-client fine-tuned LoRA models trained on the brand's visual assets via **Flux** (fal.ai). The model internalizes the brand's visual DNA — color tendencies, composition patterns, photographic style — at the model weight level. Output is inherently on-brand without prompt engineering.
 
-## Agent Team
+### Layer 2: 6-Stage Creative Pipeline
+Not one-shot generation. A structured pipeline that mirrors how the best agencies work:
 
-| Agent | Role | Output |
-|-------|------|--------|
-| **Researcher** | Market research, competitive analysis, audience insights | Research report with opportunities |
-| **Strategist** | Creative strategy, positioning, campaign frameworks | Strategic brief with message hierarchy |
-| **Brand Voice** | Voice architecture, language guidelines, tone system | Voice framework with examples |
-| **Copywriter** | Headlines, body copy, social, email, ad copy | Multi-format copy deliverables |
-| **Art Director** | Visual direction, design systems, DALL-E prompts | Visual brief + image generation prompts |
-| **Creative Director** | Reviews all outputs, synthesizes, elevates | Client-ready creative package |
+| Stage | Agent | What Happens |
+|-------|-------|-------------|
+| 1. Strategic Framing | Strategist | Audience insight, key message, emotional response, differentiation |
+| 2. Concept Exploration | Creative Director | 10-20 conceptual directions, top 5 curated for execution |
+| 3. Art Direction | Art Director | Detailed visual briefs + Flux image generation prompts |
+| 4. Visual Generation | Designer + Flux | Image generation with client LoRA, multiple variants per concept |
+| 5. Refinement | Copywriter | Channel-specific copy, headlines, CTAs, text overlay specs |
+| 6. Quality Scoring | Auto-Scorer | Multi-dimensional evaluation against Brand Bible |
 
-Each agent builds on the previous agents' outputs, creating a coherent creative pipeline.
+### Layer 3: Automated Brand Quality Scoring
+Every image scored against the Brand Bible before it reaches the founder's review queue:
+- **Color Compliance** — dominant colors vs brand palette
+- **Composition Quality** — rule-of-thirds, focal point, negative space
+- **Brand Consistency** — visual style alignment with brand DNA
+- **Technical Quality** — artifacts, resolution, hands/faces
+- **Strategic Alignment** — does it communicate the message?
+- **Platform Readiness** — correct dimensions, safe zones
 
-## Image Generation
+Only passing work enters the review queue. The founder never sees bad work.
 
-Image generation uses **DALL-E 3** through your existing OpenAI API key — no additional APIs needed.
+### Layer 4: Creative Memory
+Performance-linked memory that compounds with every engagement:
+- **Prompt Library** — effective prompts with quality scores
+- **Style Insights** — what visual approaches work for this client
+- **Performance Data** — engagement/conversion linked to creative attributes
+- **Cross-Client Patterns** — industry-level creative intelligence
+- Auto-captured on every approval, feeding back into future generations
 
-Three ways to generate images:
+### Layer 5: Brand Bible Engine
+Structured brand context (30+ fields) injected into every agent automatically:
+- Positioning, USP, mission, vision, values
+- Color palette (hex codes), typography, photography style
+- Tone of voice, voice attributes (is/is not), vocabulary
+- Composition rules, visual do's/don'ts
+- Channel-specific guidelines, competitive landscape
 
-1. **Auto from Art Direction** — After the Art Director runs, click "Generate from Art Direction" to extract 2-4 visual concepts from the output and generate images automatically
-2. **Pipeline Integration** — Check "Generate images" before running the full pipeline to auto-generate after the Art Director step
-3. **Custom Prompts** — Write any prompt directly in the Images tab with size/style/quality controls
+## Service Blueprint System
 
-Generated images are saved to disk and served through the API. You can view, download, and delete them from the project's Images tab.
+Modular client configuration with 6 templates:
+
+| Template | Use Case |
+|----------|----------|
+| **Social-First** | Fashion, lifestyle — high visual volume, LoRA, 40-60 assets/month |
+| **Performance** | DTC e-commerce — paid media, A/B testing, ROAS-driven |
+| **Content-Led** | B2B SaaS — blog/SEO, thought leadership, LinkedIn |
+| **New Brand** | Full identity build — strategy, visual identity, Brand Bible, launch |
+| **Traditional Media** | Print, OOH — CMYK, publication templates, media booking |
+| **Full Service** | Everything — all agents, all channels, quarterly strategy |
 
 ## Getting Started
 
 ### Prerequisites
-
 - Python 3.11+
 - Node.js 18+
-- OpenAI API key (used for both text agents and DALL-E 3 image generation)
+- OpenAI API key (GPT-4o for agents + quality scoring)
+- fal.ai API key (Flux image generation + LoRA)
 
-### Backend Setup
-
+### Backend
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Start the server (auto-creates database)
+cp .env.example .env  # Add OPENAI_API_KEY and FAL_KEY
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend Setup
-
+### Frontend
 ```bash
 cd frontend
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
 ## Workflow
 
-1. **Add a Client** — Enter client details, brand guidelines, tone keywords, target audience
-2. **Create a Project** — Associate it with a client
-3. **Write the Brief** — Define objective, deliverables, audience, key messages, tone, constraints
-4. **Run the Pipeline** — Execute all 6 agents sequentially (optionally with image generation)
-5. **Generate Images** — Auto-extract from art direction or create custom images
-6. **Review Deliverables** — Read agent outputs, view images, approve or provide feedback
-7. **Deliver** — Use the Creative Director's final package + generated visuals for client presentation
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/health` | Health check |
-| `GET` | `/api/dashboard/stats` | Dashboard statistics |
-| `GET/POST` | `/api/clients` | List / create clients |
-| `GET/PATCH/DELETE` | `/api/clients/:id` | Get / update / delete client |
-| `GET/POST` | `/api/projects` | List / create projects |
-| `GET/PATCH/DELETE` | `/api/projects/:id` | Get / update / delete project |
-| `POST` | `/api/briefs` | Create brief |
-| `GET` | `/api/briefs/project/:id` | Get brief by project |
-| `PATCH` | `/api/briefs/:id` | Update brief |
-| `GET` | `/api/agents/roles` | List agent roles |
-| `POST` | `/api/agents/run` | Run single agent |
-| `POST` | `/api/agents/pipeline` | Run full pipeline (with optional image generation) |
-| `GET` | `/api/agents/runs` | List agent runs |
-| `GET/POST` | `/api/deliverables` | List / create deliverables |
-| `GET/PATCH/DELETE` | `/api/deliverables/:id` | Get / update / delete deliverable |
-| `POST` | `/api/images/generate` | Generate image from custom prompt |
-| `POST` | `/api/images/from-art-direction` | Generate images from Art Director output |
-| `GET` | `/api/images` | List generated images |
-| `GET` | `/api/images/:id` | Get image metadata |
-| `GET` | `/api/images/:id/file` | Serve image file |
-| `DELETE` | `/api/images/:id` | Delete image |
+1. **Onboard Client** — Create client → Build Brand Bible (positioning, visual identity, verbal identity) → Choose Service Blueprint template → Register/train LoRA model
+2. **Create Project** — Write brief with objective, audience, messages, emotional response, mandatory inclusions
+3. **Run 6-Stage Pipeline** — Strategy → Concepts → Art Direction → Visual Generation → Copy → Quality Scoring
+4. **Review Queue** — Only quality-scored passing work is presented. Approve, reject, or provide feedback.
+5. **Creative Memory** — Every approval auto-captures learnings. System gets better with every engagement.
 
 ## Tech Stack
 
-**Backend:** FastAPI, SQLAlchemy (async), SQLite, OpenAI API (GPT-4o + DALL-E 3), Pydantic v2
+**Backend:** FastAPI, SQLAlchemy (async), SQLite, OpenAI (GPT-4o), fal.ai (Flux + LoRA), Pydantic v2
 
 **Frontend:** Next.js 16, TypeScript, Tailwind CSS v4, shadcn/ui, Lucide Icons
