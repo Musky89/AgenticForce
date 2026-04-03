@@ -20,7 +20,7 @@ from app.models.models import (
 )
 from app.agents.registry import get_agent
 from app.services.creative_memory import get_client_memory_context, auto_capture_from_approval
-from app.services.image_gen import generate_image_flux, generate_images_from_art_direction
+from app.services.image_gen import generate_image, generate_images_from_art_direction
 from app.services.quality_scoring import score_image
 
 logger = logging.getLogger(__name__)

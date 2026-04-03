@@ -191,8 +191,7 @@ export interface GeneratedImage {
   revised_prompt: string | null;
   label: string | null;
   size: string;
-  quality: string;
-  style: string;
+  provider: string;
   quality_score: number | null;
   quality_breakdown: Record<string, unknown> | null;
   is_approved: boolean;

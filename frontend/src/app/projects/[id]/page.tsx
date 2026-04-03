@@ -660,6 +660,7 @@ function ImagesTab({
   const [generatingFromArt, setGeneratingFromArt] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [selectedSize, setSelectedSize] = useState("1024x1024");
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const handleGenerateCustom = async () => {
@@ -676,6 +677,7 @@ function ImagesTab({
         width: w || 1024,
         height: h || 1024,
         use_client_lora: true,
+        provider: selectedProvider || undefined,
       });
       toast.success("Image generated!");
       setCustomPrompt("");
@@ -690,7 +692,7 @@ function ImagesTab({
   const handleGenerateFromArt = async () => {
     setGeneratingFromArt(true);
     try {
-      const result = await api.generateFromArtDirection(projectId);
+      const result = await api.generateFromArtDirection(projectId, selectedProvider || undefined);
       toast.success(`Generated ${result.length} image(s) from art direction`);
       onRefresh();
     } catch (e) {
@@ -765,18 +767,33 @@ function ImagesTab({
               onChange={(e) => setCustomPrompt(e.target.value)}
               rows={3}
             />
-            <div>
-              <Label className="text-xs">Size</Label>
-              <select
-                value={selectedSize}
-                onChange={(e) => setSelectedSize(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
-              >
-                <option value="1024x1024">Square (1024x1024)</option>
-                <option value="1792x1024">Landscape (1792x1024)</option>
-                <option value="1024x1792">Portrait (1024x1792)</option>
-                <option value="1344x768">Wide (1344x768)</option>
-              </select>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs">Provider</Label>
+                <select
+                  value={selectedProvider}
+                  onChange={(e) => setSelectedProvider(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                >
+                  <option value="">Auto (best for context)</option>
+                  <option value="flux">Flux (LoRA support)</option>
+                  <option value="imagen">Gemini Imagen 4</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Size</Label>
+                <select
+                  value={selectedSize}
+                  onChange={(e) => setSelectedSize(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs"
+                >
+                  <option value="1024x1024">Square (1:1)</option>
+                  <option value="1344x1024">Landscape (4:3)</option>
+                  <option value="1792x1024">Wide (16:9)</option>
+                  <option value="1024x1344">Portrait (3:4)</option>
+                  <option value="1024x1792">Tall (9:16)</option>
+                </select>
+              </div>
             </div>
             <Button
               onClick={handleGenerateCustom}
@@ -844,7 +861,7 @@ function ImagesTab({
                       {img.label || "Generated Image"}
                     </p>
                     <p className="text-white/70 text-xs">
-                      {img.size}{img.quality_score !== null ? ` · Score: ${img.quality_score}/10` : ""}
+                      {img.size} · {img.provider === "imagen" ? "Imagen 4" : "Flux"}{img.quality_score !== null ? ` · ${img.quality_score}/10` : ""}
                     </p>
                   </div>
                 </div>

@@ -254,8 +254,7 @@ class GeneratedImage(Base):
     revised_prompt: Mapped[str | None] = mapped_column(Text)
     label: Mapped[str | None] = mapped_column(String(255))
     size: Mapped[str] = mapped_column(String(20), default="1024x1024")
-    quality: Mapped[str] = mapped_column(String(20), default="standard")
-    style: Mapped[str] = mapped_column(String(20), default="vivid")
+    provider: Mapped[str] = mapped_column(String(20), default="flux")  # "flux" or "imagen"
     lora_model_id: Mapped[str | None] = mapped_column(ForeignKey("lora_models.id"))
     # Quality scoring fields
     quality_score: Mapped[float | None] = mapped_column(Float)

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.models import GeneratedImage, AgentRun, AgentRole, RunStatus, LoRAModel, BrandBible, Brief
 from app.schemas.schemas import ImageGenerateRequest, ImageFromArtDirectionRequest, GeneratedImageOut
-from app.services.image_gen import generate_image_flux, generate_images_from_art_direction
+from app.services.image_gen import generate_image, generate_images_from_art_direction, select_provider
 from app.services.quality_scoring import score_image
 
 logger = logging.getLogger(__name__)
@@ -17,9 +17,22 @@ IMAGES_DIR = Path(__file__).parent.parent.parent / "generated_images"
 router = APIRouter(prefix="/images", tags=["images"])
 
 
+@router.get("/providers")
+async def list_providers():
+    """List available image generation providers and which is currently active."""
+    from app.config import get_settings
+    settings = get_settings()
+    providers = []
+    if settings.fal_key:
+        providers.append({"id": "flux", "name": "Flux (fal.ai)", "supports_lora": True, "status": "available"})
+    if settings.gemini_api_key:
+        providers.append({"id": "imagen", "name": "Gemini Imagen 4", "supports_lora": False, "status": "available"})
+    return {"providers": providers, "default": settings.default_image_provider}
+
+
 @router.post("/generate", response_model=list[GeneratedImageOut], status_code=201)
 async def generate(payload: ImageGenerateRequest, db: AsyncSession = Depends(get_db)):
-    """Generate images using Flux via fal.ai, optionally with client LoRA."""
+    """Generate images. Auto-selects Flux (LoRA) or Imagen (raw quality) based on context."""
     lora_url = None
     lora_id = None
 
@@ -37,12 +50,16 @@ async def generate(payload: ImageGenerateRequest, db: AsyncSession = Depends(get
                 lora_url = lora.weights_url
                 lora_id = lora.id
 
-    results = await generate_image_flux(
+    selected = select_provider(lora_url=lora_url, preferred=payload.provider)
+
+    results = await generate_image(
         prompt=payload.prompt,
         width=payload.width,
         height=payload.height,
-        lora_url=lora_url,
         num_images=payload.num_images,
+        lora_url=lora_url,
+        provider=payload.provider,
+        aspect_ratio=payload.aspect_ratio,
     )
 
     images = []
@@ -52,7 +69,8 @@ async def generate(payload: ImageGenerateRequest, db: AsyncSession = Depends(get
             filename=r["filename"],
             prompt=r["prompt"],
             label="Custom Generation",
-            size=f"{payload.width}x{payload.height}",
+            size=f"{r.get('width', payload.width)}x{r.get('height', payload.height)}",
+            provider=selected,
             lora_model_id=lora_id,
         )
         db.add(img)
@@ -92,7 +110,8 @@ async def generate_from_art_direction(payload: ImageFromArtDirectionRequest, db:
             lora_url = lora.weights_url
             lora_id = lora.id
 
-    gen_results = await generate_images_from_art_direction(art_text, lora_url=lora_url)
+    selected = select_provider(lora_url=lora_url, preferred=payload.provider)
+    gen_results = await generate_images_from_art_direction(art_text, lora_url=lora_url, provider=payload.provider)
 
     images = []
     for r in gen_results:
@@ -105,6 +124,7 @@ async def generate_from_art_direction(payload: ImageFromArtDirectionRequest, db:
             prompt=r["prompt"],
             label=r.get("label", "Art Direction Image"),
             size=f"{r.get('width', 1024)}x{r.get('height', 1024)}",
+            provider=selected,
             lora_model_id=lora_id,
         )
         db.add(img)

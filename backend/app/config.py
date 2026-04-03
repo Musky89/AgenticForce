@@ -10,10 +10,17 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
 
-    # Image Generation (fal.ai — Flux + LoRA)
+    # Image Generation — Flux via fal.ai (supports LoRA)
     fal_key: str = ""
-    image_model: str = "fal-ai/flux/dev"
-    image_model_lora: str = "fal-ai/flux-lora"
+    flux_model: str = "fal-ai/flux/dev"
+    flux_model_lora: str = "fal-ai/flux-lora"
+
+    # Image Generation — Gemini Imagen (highest raw quality)
+    gemini_api_key: str = ""
+    imagen_model: str = "imagen-4.0-generate-001"
+
+    # Default provider: "flux" (LoRA support) or "imagen" (raw quality)
+    default_image_provider: str = "flux"
 
     # Security
     secret_key: str = "change-this-to-a-random-secret"

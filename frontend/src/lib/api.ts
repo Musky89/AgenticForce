@@ -114,10 +114,12 @@ export const api = {
   // Images
   listImages: (projectId?: string) =>
     request<GeneratedImage[]>(`/images${projectId ? `?project_id=${projectId}` : ""}`),
-  generateImage: (data: { prompt: string; project_id?: string; width?: number; height?: number; num_images?: number; use_client_lora?: boolean }) =>
+  getImageProviders: () =>
+    request<{ providers: { id: string; name: string; supports_lora: boolean }[]; default: string }>("/images/providers"),
+  generateImage: (data: { prompt: string; project_id?: string; width?: number; height?: number; num_images?: number; use_client_lora?: boolean; provider?: string; aspect_ratio?: string }) =>
     request<GeneratedImage[]>("/images/generate", { method: "POST", body: JSON.stringify(data) }),
-  generateFromArtDirection: (projectId: string) =>
-    request<GeneratedImage[]>("/images/from-art-direction", { method: "POST", body: JSON.stringify({ project_id: projectId }) }),
+  generateFromArtDirection: (projectId: string, provider?: string) =>
+    request<GeneratedImage[]>("/images/from-art-direction", { method: "POST", body: JSON.stringify({ project_id: projectId, provider }) }),
   scoreImage: (imageId: string) =>
     request<GeneratedImage>(`/images/${imageId}/score`, { method: "POST" }),
   approveImage: (imageId: string) =>

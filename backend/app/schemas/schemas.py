@@ -322,11 +322,14 @@ class ImageGenerateRequest(BaseModel):
     width: int = 1024
     height: int = 1024
     num_images: int = 1
+    provider: str | None = None  # "flux", "imagen", or None for auto-select
     use_client_lora: bool = False
+    aspect_ratio: str | None = None  # "1:1", "4:3", "16:9", etc.
 
 
 class ImageFromArtDirectionRequest(BaseModel):
     project_id: str
+    provider: str | None = None  # override auto-selection
 
 
 class GeneratedImageOut(BaseModel):
@@ -338,8 +341,7 @@ class GeneratedImageOut(BaseModel):
     revised_prompt: str | None
     label: str | None
     size: str
-    quality: str
-    style: str
+    provider: str
     quality_score: float | None
     quality_breakdown: dict | None
     is_approved: bool
